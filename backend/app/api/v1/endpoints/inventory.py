@@ -70,7 +70,7 @@ async def create_coffee(
     
     coffee = Coffee(
         hr_id=hr_id,
-        name=coffee_data.name,
+        label=coffee_data.label,
         origin=coffee_data.origin,
         region=coffee_data.region,
         variety=coffee_data.variety,
@@ -155,11 +155,11 @@ async def create_batch(
     batch = Batch(
         coffee_id=batch_data.coffee_id,
         lot_number=batch_data.lot_number,
-        green_stock_kg=batch_data.green_stock_kg,
-        roasted_total_kg=batch_data.roasted_total_kg,
+        initial_weight_kg=batch_data.initial_weight_kg,
+        current_weight_kg=batch_data.initial_weight_kg,
+        roasted_total_weight_kg=batch_data.roasted_total_weight_kg,
         status=batch_data.status,
         arrival_date=batch_data.arrival_date,
-        expiration_date=batch_data.expiration_date,
         supplier=batch_data.supplier,
         notes=batch_data.notes,
     )

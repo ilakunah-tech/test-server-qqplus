@@ -7,6 +7,13 @@ import asyncio
 from app.db.base import Base
 from app.config import settings
 
+# Import all models so Alembic can detect them
+from app.models.user import User  # noqa
+from app.models.coffee import Coffee  # noqa
+from app.models.batch import Batch  # noqa
+from app.models.schedule import Schedule  # noqa
+from app.models.roast import Roast  # noqa
+
 # this is the Alembic Config object
 config = context.config
 

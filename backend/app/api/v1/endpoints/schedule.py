@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from uuid import UUID
 from typing import Optional
-from datetime import datetime, date
+from datetime import date, datetime, timezone
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.schedule import Schedule
 from app.models.coffee import Coffee
+from app.models.batch import Batch
 from app.models.roast import Roast
 from app.schemas.schedule import (
     ScheduleCreate,
@@ -30,24 +31,23 @@ async def list_schedule(
     current_user: User = Depends(get_current_user),
 ):
     """List schedule items with optional date filtering."""
-    query = select(Schedule)
-    
+    query = select(Schedule).where(Schedule.user_id == current_user.id)
     if date_from:
-        query = query.where(Schedule.planned_date >= datetime.combine(date_from, datetime.min.time()))
+        query = query.where(Schedule.scheduled_date >= date_from)
     if date_to:
-        query = query.where(Schedule.planned_date <= datetime.combine(date_to, datetime.max.time()))
-    
-    count_query = select(func.count()).select_from(Schedule)
+        query = query.where(Schedule.scheduled_date <= date_to)
+
+    count_query = select(func.count()).select_from(Schedule).where(Schedule.user_id == current_user.id)
     if date_from:
-        count_query = count_query.where(Schedule.planned_date >= datetime.combine(date_from, datetime.min.time()))
+        count_query = count_query.where(Schedule.scheduled_date >= date_from)
     if date_to:
-        count_query = count_query.where(Schedule.planned_date <= datetime.combine(date_to, datetime.max.time()))
-    
+        count_query = count_query.where(Schedule.scheduled_date <= date_to)
+
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
-    
+
     result = await db.execute(
-        query.order_by(Schedule.planned_date.asc()).limit(limit).offset(offset)
+        query.order_by(Schedule.scheduled_date.asc()).limit(limit).offset(offset)
     )
     schedules = result.scalars().all()
     
@@ -66,23 +66,22 @@ async def create_schedule(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new schedule item."""
-    # Verify coffee exists
-    coffee_result = await db.execute(select(Coffee).where(Coffee.id == schedule_data.coffee_id))
-    coffee = coffee_result.scalar_one_or_none()
-    if not coffee:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coffee not found")
-    
-    # Verify batch if provided
+    if schedule_data.coffee_id:
+        coffee_result = await db.execute(select(Coffee).where(Coffee.id == schedule_data.coffee_id))
+        if not coffee_result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coffee not found")
     if schedule_data.batch_id:
         batch_result = await db.execute(select(Batch).where(Batch.id == schedule_data.batch_id))
-        batch = batch_result.scalar_one_or_none()
-        if not batch:
+        if not batch_result.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
-    
+
     schedule = Schedule(
+        user_id=current_user.id,
+        title=schedule_data.title,
+        scheduled_date=schedule_data.scheduled_date,
+        scheduled_weight_kg=schedule_data.scheduled_weight_kg,
         coffee_id=schedule_data.coffee_id,
         batch_id=schedule_data.batch_id,
-        planned_date=schedule_data.planned_date,
         notes=schedule_data.notes,
         status="pending",
     )
@@ -103,7 +102,9 @@ async def complete_schedule(
     current_user: User = Depends(get_current_user),
 ):
     """Mark a schedule item as completed and link it to a roast."""
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+    result = await db.execute(
+        select(Schedule).where(Schedule.id == schedule_id, Schedule.user_id == current_user.id)
+    )
     schedule = result.scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
@@ -115,10 +116,11 @@ async def complete_schedule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roast not found")
     
     schedule.status = "completed"
-    schedule.completed_roast_id = complete_data.roast_id
+    schedule.completed_at = datetime.now(timezone.utc)
     if complete_data.notes:
         schedule.notes = complete_data.notes
-    
+    roast.schedule_id = schedule_id
+
     await db.commit()
     await db.refresh(schedule)
     
@@ -135,7 +137,9 @@ async def update_schedule(
     current_user: User = Depends(get_current_user),
 ):
     """Update a schedule item."""
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+    result = await db.execute(
+        select(Schedule).where(Schedule.id == schedule_id, Schedule.user_id == current_user.id)
+    )
     schedule = result.scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")

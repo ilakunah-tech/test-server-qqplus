@@ -5,7 +5,7 @@ from typing import Optional
 
 
 class CoffeeBase(BaseModel):
-    name: str
+    label: str
     origin: Optional[str] = None
     region: Optional[str] = None
     variety: Optional[str] = None
@@ -19,7 +19,7 @@ class CoffeeCreate(CoffeeBase):
 
 
 class CoffeeUpdate(BaseModel):
-    name: Optional[str] = None
+    label: Optional[str] = None
     origin: Optional[str] = None
     region: Optional[str] = None
     variety: Optional[str] = None
@@ -31,9 +31,10 @@ class CoffeeUpdate(BaseModel):
 class CoffeeResponse(CoffeeBase):
     id: UUID
     hr_id: str
+    stock_weight_kg: Optional[float] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from uuid import UUID
+from sqlalchemy import select, func
+from uuid import UUID, uuid4
 from typing import Optional
 from datetime import datetime, date
 from app.api.deps import get_db, get_current_user
@@ -26,23 +26,22 @@ async def list_roasts(
 ):
     """List roasts with optional date filtering."""
     query = select(Roast)
-    
     if date_from:
-        query = query.where(Roast.roast_date >= datetime.combine(date_from, datetime.min.time()))
+        query = query.where(Roast.roasted_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        query = query.where(Roast.roast_date <= datetime.combine(date_to, datetime.max.time()))
-    
+        query = query.where(Roast.roasted_at <= datetime.combine(date_to, datetime.max.time()))
+
     count_query = select(func.count()).select_from(Roast)
     if date_from:
-        count_query = count_query.where(Roast.roast_date >= datetime.combine(date_from, datetime.min.time()))
+        count_query = count_query.where(Roast.roasted_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        count_query = count_query.where(Roast.roast_date <= datetime.combine(date_to, datetime.max.time()))
-    
+        count_query = count_query.where(Roast.roasted_at <= datetime.combine(date_to, datetime.max.time()))
+
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
-    
+
     result = await db.execute(
-        query.order_by(Roast.roast_date.desc()).limit(limit).offset(offset)
+        query.order_by(Roast.roasted_at.desc()).limit(limit).offset(offset)
     )
     roasts = result.scalars().all()
     
@@ -61,44 +60,38 @@ async def create_roast(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new roast."""
-    # Verify batch and coffee exist
-    batch_result = await db.execute(select(Batch).where(Batch.id == roast_data.batch_id))
-    batch = batch_result.scalar_one_or_none()
-    if not batch:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
-    
-    # Calculate weight_loss_percent
-    weight_loss_percent = None
-    if roast_data.green_weight_kg > 0:
-        weight_loss_percent = ((roast_data.green_weight_kg - roast_data.roasted_weight_kg) / roast_data.green_weight_kg) * 100
-    
+    batch = None
+    if roast_data.batch_id:
+        batch_result = await db.execute(select(Batch).where(Batch.id == roast_data.batch_id))
+        batch = batch_result.scalar_one_or_none()
+        if not batch:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
+
+    roasted_w = (roast_data.roasted_weight_kg or 0)
     roast = Roast(
+        id=uuid4(),
+        user_id=current_user.id,
         batch_id=roast_data.batch_id,
         coffee_id=roast_data.coffee_id,
-        roast_date=roast_data.roast_date,
-        operator=roast_data.operator,
-        machine=roast_data.machine,
+        schedule_id=roast_data.schedule_id,
+        roasted_at=roast_data.roasted_at,
         green_weight_kg=roast_data.green_weight_kg,
         roasted_weight_kg=roast_data.roasted_weight_kg,
-        weight_loss_percent=weight_loss_percent,
-        roast_time_sec=roast_data.roast_time_sec,
-        drop_temp=roast_data.drop_temp,
-        first_crack_temp=roast_data.first_crack_temp,
-        first_crack_time=roast_data.first_crack_time,
-        agtron=roast_data.agtron,
+        title=roast_data.title,
+        roast_level=roast_data.roast_level,
         notes=roast_data.notes,
     )
     db.add(roast)
     await db.commit()
     await db.refresh(roast)
-    
-    # Update batch roasted_total_kg
-    batch.roasted_total_kg += roast_data.roasted_weight_kg
-    batch.green_stock_kg -= roast_data.green_weight_kg
-    if batch.green_stock_kg <= 0:
-        batch.status = "depleted"
-    await db.commit()
-    
+
+    if batch is not None:
+        batch.roasted_total_weight_kg += roasted_w
+        batch.current_weight_kg -= roast_data.green_weight_kg
+        if batch.current_weight_kg <= 0:
+            batch.status = "depleted"
+        await db.commit()
+
     return {
         "data": RoastResponse.model_validate(roast)
     }
@@ -135,12 +128,12 @@ async def upload_profile(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roast not found")
     
     profile_path = await save_alog_file(roast_id, file)
-    roast.profile_file = profile_path
+    roast.alog_file_path = profile_path
     await db.commit()
-    
+
     return {
         "data": {
-            "profile_file": profile_path,
+            "alog_file_path": profile_path,
         }
     }
 
@@ -154,10 +147,10 @@ async def download_profile(
     """Download .alog profile file for a roast."""
     result = await db.execute(select(Roast).where(Roast.id == roast_id))
     roast = result.scalar_one_or_none()
-    if not roast or not roast.profile_file:
+    if not roast or not roast.alog_file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile file not found")
-    
-    file_path = f"/app{roast.profile_file}"
+
+    file_path = f"/app{roast.alog_file_path}"
     return FileResponse(
         file_path,
         media_type="application/octet-stream",

@@ -6,11 +6,11 @@ from typing import Optional
 
 class BatchBase(BaseModel):
     lot_number: str
-    green_stock_kg: float = 0.0
-    roasted_total_kg: float = 0.0
+    initial_weight_kg: float
+    current_weight_kg: float = 0.0
+    roasted_total_weight_kg: float = 0.0
     status: str = "active"
     arrival_date: Optional[date] = None
-    expiration_date: Optional[date] = None
     supplier: Optional[str] = None
     notes: Optional[str] = None
 
@@ -20,11 +20,10 @@ class BatchCreate(BatchBase):
 
 
 class BatchUpdate(BaseModel):
-    green_stock_kg: Optional[float] = None
-    roasted_total_kg: Optional[float] = None
+    current_weight_kg: Optional[float] = None
+    roasted_total_weight_kg: Optional[float] = None
     status: Optional[str] = None
     arrival_date: Optional[date] = None
-    expiration_date: Optional[date] = None
     supplier: Optional[str] = None
     notes: Optional[str] = None
 
@@ -34,7 +33,7 @@ class BatchResponse(BatchBase):
     coffee_id: UUID
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 

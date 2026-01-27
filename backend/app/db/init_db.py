@@ -4,6 +4,7 @@ Run this after migrations.
 """
 import asyncio
 from datetime import datetime, date, timedelta
+from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
@@ -39,53 +40,58 @@ async def init_db():
         coffees_data = [
             {
                 "hr_id": "ETH-YRG-2024-001",
-                "name": "Ethiopia Yirgacheffe",
+                "label": "Ethiopia Yirgacheffe",
                 "origin": "Ethiopia",
                 "region": "Yirgacheffe",
                 "variety": "Heirloom",
                 "processing": "Washed",
                 "moisture": 10.5,
                 "density": 0.72,
+                "stock_weight_kg": 60.0,
             },
             {
-                "hr_id": "COL-HUI-2024-002",
-                "name": "Colombia Huila",
+                "hr_id": "COL-HUI-2024-001",
+                "label": "Colombia Huila",
                 "origin": "Colombia",
                 "region": "Huila",
                 "variety": "Caturra",
                 "processing": "Washed",
                 "moisture": 11.0,
                 "density": 0.70,
+                "stock_weight_kg": 55.0,
             },
             {
-                "hr_id": "BRA-CER-2024-003",
-                "name": "Brazil Cerrado",
+                "hr_id": "BRA-CER-2024-001",
+                "label": "Brazil Cerrado",
                 "origin": "Brazil",
                 "region": "Cerrado",
                 "variety": "Bourbon",
                 "processing": "Natural",
                 "moisture": 11.5,
                 "density": 0.68,
+                "stock_weight_kg": 70.0,
             },
             {
-                "hr_id": "KEN-AA-2024-004",
-                "name": "Kenya AA",
+                "hr_id": "KEN-AA-2024-001",
+                "label": "Kenya AA",
                 "origin": "Kenya",
                 "region": "Nyeri",
                 "variety": "SL28",
                 "processing": "Washed",
                 "moisture": 10.8,
                 "density": 0.73,
+                "stock_weight_kg": 50.0,
             },
             {
-                "hr_id": "GUA-ANT-2024-005",
-                "name": "Guatemala Antigua",
+                "hr_id": "GTM-ANT-2024-001",
+                "label": "Guatemala Antigua",
                 "origin": "Guatemala",
                 "region": "Antigua",
                 "variety": "Bourbon",
                 "processing": "Washed",
                 "moisture": 11.2,
                 "density": 0.71,
+                "stock_weight_kg": 45.0,
             },
         ]
         
@@ -102,53 +108,53 @@ async def init_db():
             {
                 "coffee_id": coffees[0].id,
                 "lot_number": "LOT-2024-001",
-                "green_stock_kg": 100.0,
-                "roasted_total_kg": 25.0,
+                "initial_weight_kg": 60.0,
+                "current_weight_kg": 58.5,
+                "roasted_total_weight_kg": 1.5,
                 "status": "active",
-                "arrival_date": date(2024, 1, 10),
-                "expiration_date": date(2025, 1, 10),
-                "supplier": "Ethiopian Coffee Exporters",
+                "arrival_date": date(2024, 1, 15),
+                "supplier": "Ethiopian Coffee Exporter",
                 "notes": "High quality Yirgacheffe",
             },
             {
-                "coffee_id": coffees[0].id,
-                "lot_number": "LOT-2024-002",
-                "green_stock_kg": 50.0,
-                "roasted_total_kg": 10.0,
-                "status": "active",
-                "arrival_date": date(2024, 1, 15),
-                "expiration_date": date(2025, 1, 15),
-                "supplier": "Ethiopian Coffee Exporters",
-            },
-            {
                 "coffee_id": coffees[1].id,
-                "lot_number": "LOT-2024-003",
-                "green_stock_kg": 75.0,
-                "roasted_total_kg": 20.0,
+                "lot_number": "LOT-2024-002",
+                "initial_weight_kg": 55.0,
+                "current_weight_kg": 52.0,
+                "roasted_total_weight_kg": 3.0,
                 "status": "active",
-                "arrival_date": date(2024, 1, 12),
-                "expiration_date": date(2025, 1, 12),
+                "arrival_date": date(2024, 1, 20),
                 "supplier": "Colombian Coffee Co.",
             },
             {
                 "coffee_id": coffees[2].id,
-                "lot_number": "LOT-2024-004",
-                "green_stock_kg": 150.0,
-                "roasted_total_kg": 50.0,
+                "lot_number": "LOT-2024-003",
+                "initial_weight_kg": 70.0,
+                "current_weight_kg": 65.0,
+                "roasted_total_weight_kg": 5.0,
                 "status": "active",
-                "arrival_date": date(2024, 1, 8),
-                "expiration_date": date(2025, 1, 8),
+                "arrival_date": date(2024, 1, 18),
                 "supplier": "Brazilian Coffee Export",
             },
             {
                 "coffee_id": coffees[3].id,
-                "lot_number": "LOT-2024-005",
-                "green_stock_kg": 60.0,
-                "roasted_total_kg": 15.0,
+                "lot_number": "LOT-2024-004",
+                "initial_weight_kg": 50.0,
+                "current_weight_kg": 48.0,
+                "roasted_total_weight_kg": 2.0,
                 "status": "active",
-                "arrival_date": date(2024, 1, 18),
-                "expiration_date": date(2025, 1, 18),
+                "arrival_date": date(2024, 1, 22),
                 "supplier": "Kenya Coffee Board",
+            },
+            {
+                "coffee_id": coffees[4].id,
+                "lot_number": "LOT-2024-005",
+                "initial_weight_kg": 45.0,
+                "current_weight_kg": 43.0,
+                "roasted_total_weight_kg": 2.0,
+                "status": "active",
+                "arrival_date": date(2024, 1, 25),
+                "supplier": "Guatemalan Coffee Export",
             },
         ]
         
@@ -170,23 +176,19 @@ async def init_db():
             
             green_weight = 10.0 + (i * 0.5)
             roasted_weight = green_weight * 0.85
-            weight_loss = ((green_weight - roasted_weight) / green_weight) * 100
+            roast_levels = ["Light", "Medium", "Medium-Dark", "Dark"]
             
             roasts_data.append({
+                "id": uuid4(),  # Generate UUID for seed data
+                "user_id": admin_user.id,
                 "batch_id": batch.id,
                 "coffee_id": coffee.id,
-                "roast_date": now - timedelta(days=15-i),
-                "operator": "John Doe" if i % 2 == 0 else "Jane Smith",
-                "machine": "Probat P12",
+                "roasted_at": now - timedelta(days=15-i),
                 "green_weight_kg": green_weight,
                 "roasted_weight_kg": roasted_weight,
-                "weight_loss_percent": weight_loss,
-                "roast_time_sec": 600 + (i * 30),
-                "drop_temp": 200 + (i * 2),
-                "first_crack_temp": 190 + (i * 2),
-                "first_crack_time": 400 + (i * 20),
-                "agtron": 55 + (i % 10),
-                "notes": f"Roast #{i+1} - {coffee.name}",
+                "roast_level": roast_levels[i % len(roast_levels)],
+                "title": f"Roast #{i+1} - {coffee.label}",
+                "notes": f"Roast #{i+1} - {coffee.label}",
             })
         
         roasts = []
@@ -205,13 +207,19 @@ async def init_db():
             batch_idx = i % len(batches) if i < len(batches) else None
             batch = batches[batch_idx] if batch_idx is not None else None
             
+            scheduled_date = (now + timedelta(days=i+1)).date()
+            scheduled_weight = 10.0 + (i * 0.5)
+            
             schedules_data.append({
+                "user_id": admin_user.id,
                 "coffee_id": coffee.id,
                 "batch_id": batch.id if batch else None,
-                "planned_date": now + timedelta(days=i+1),
+                "title": f"Schedule for {coffee.label}",
+                "scheduled_date": scheduled_date,
+                "scheduled_weight_kg": scheduled_weight,
                 "status": "completed" if i < 3 else "pending",
-                "completed_roast_id": roasts[i].id if i < 3 and i < len(roasts) else None,
-                "notes": f"Scheduled roast for {coffee.name}",
+                "completed_at": (now + timedelta(days=i+1)) if i < 3 else None,
+                "notes": f"Scheduled roast for {coffee.label}",
             })
         
         for schedule_data in schedules_data:
