@@ -14,6 +14,7 @@ class RoastBase(BaseModel):
 
 
 class RoastCreate(RoastBase):
+    id: UUID  # Client-provided UUID for idempotency
     batch_id: Optional[UUID] = None
     coffee_id: Optional[UUID] = None
     schedule_id: Optional[UUID] = None

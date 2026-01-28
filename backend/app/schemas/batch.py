@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import date, datetime
 from typing import Optional
@@ -20,12 +20,18 @@ class BatchCreate(BatchBase):
 
 
 class BatchUpdate(BaseModel):
+    lot_number: Optional[str] = None
     current_weight_kg: Optional[float] = None
     roasted_total_weight_kg: Optional[float] = None
     status: Optional[str] = None
     arrival_date: Optional[date] = None
     supplier: Optional[str] = None
     notes: Optional[str] = None
+
+
+class BatchDeductRequest(BaseModel):
+    """Request to deduct weight from batch (atomic, with SELECT FOR UPDATE)."""
+    weight_kg: float = Field(..., gt=0, description="Weight to deduct in kg")
 
 
 class BatchResponse(BatchBase):

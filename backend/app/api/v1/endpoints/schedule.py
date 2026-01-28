@@ -23,34 +23,42 @@ router = APIRouter()
 
 @router.get("/schedule", response_model=dict)
 async def list_schedule(
+    limit: int = Query(100, ge=1, le=10000),
+    offset: int = Query(0, ge=0),
+    status: Optional[str] = Query(None, description="Filter by status (pending/completed)"),
+    coffee_id: Optional[UUID] = Query(None, description="Filter by coffee_id"),
+    batch_id: Optional[UUID] = Query(None, description="Filter by batch_id"),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    limit: int = Query(1000, ge=1, le=10000),
-    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List schedule items with optional date filtering."""
+    """List schedules with optional filters (status, coffee_id, batch_id, date range)."""
     query = select(Schedule).where(Schedule.user_id == current_user.id)
+    count_query = select(func.count()).select_from(Schedule).where(Schedule.user_id == current_user.id)
+
+    if status:
+        query = query.where(Schedule.status == status)
+        count_query = count_query.where(Schedule.status == status)
+    if coffee_id:
+        query = query.where(Schedule.coffee_id == coffee_id)
+        count_query = count_query.where(Schedule.coffee_id == coffee_id)
+    if batch_id:
+        query = query.where(Schedule.batch_id == batch_id)
+        count_query = count_query.where(Schedule.batch_id == batch_id)
     if date_from:
         query = query.where(Schedule.scheduled_date >= date_from)
-    if date_to:
-        query = query.where(Schedule.scheduled_date <= date_to)
-
-    count_query = select(func.count()).select_from(Schedule).where(Schedule.user_id == current_user.id)
-    if date_from:
         count_query = count_query.where(Schedule.scheduled_date >= date_from)
     if date_to:
+        query = query.where(Schedule.scheduled_date <= date_to)
         count_query = count_query.where(Schedule.scheduled_date <= date_to)
 
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
-
     result = await db.execute(
-        query.order_by(Schedule.scheduled_date.asc()).limit(limit).offset(offset)
+        query.order_by(Schedule.scheduled_date.desc()).limit(limit).offset(offset)
     )
     schedules = result.scalars().all()
-    
     return {
         "data": {
             "items": [ScheduleResponse.model_validate(s) for s in schedules],
@@ -69,11 +77,11 @@ async def create_schedule(
     if schedule_data.coffee_id:
         coffee_result = await db.execute(select(Coffee).where(Coffee.id == schedule_data.coffee_id))
         if not coffee_result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coffee not found")
+            raise HTTPException(status_code=404, detail="Coffee not found")
     if schedule_data.batch_id:
         batch_result = await db.execute(select(Batch).where(Batch.id == schedule_data.batch_id))
         if not batch_result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
+            raise HTTPException(status_code=404, detail="Batch not found")
 
     schedule = Schedule(
         user_id=current_user.id,
@@ -89,9 +97,26 @@ async def create_schedule(
     await db.commit()
     await db.refresh(schedule)
     
-    return {
-        "data": ScheduleResponse.model_validate(schedule)
-    }
+    return {"data": ScheduleResponse.model_validate(schedule)}
+
+
+@router.get("/schedule/{schedule_id}", response_model=dict)
+async def get_schedule(
+    schedule_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a single schedule item by ID."""
+    result = await db.execute(
+        select(Schedule).where(
+            Schedule.id == schedule_id,
+            Schedule.user_id == current_user.id,
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    return {"data": ScheduleResponse.model_validate(schedule)}
 
 
 @router.put("/schedule/{schedule_id}/complete", response_model=dict)
@@ -107,13 +132,13 @@ async def complete_schedule(
     )
     schedule = result.scalar_one_or_none()
     if not schedule:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+        raise HTTPException(status_code=404, detail="Schedule not found")
     
     # Verify roast exists
     roast_result = await db.execute(select(Roast).where(Roast.id == complete_data.roast_id))
     roast = roast_result.scalar_one_or_none()
     if not roast:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roast not found")
+        raise HTTPException(status_code=404, detail="Roast not found")
     
     schedule.status = "completed"
     schedule.completed_at = datetime.now(timezone.utc)
@@ -136,13 +161,13 @@ async def update_schedule(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a schedule item."""
+    """Update a schedule item by ID."""
     result = await db.execute(
         select(Schedule).where(Schedule.id == schedule_id, Schedule.user_id == current_user.id)
     )
     schedule = result.scalar_one_or_none()
     if not schedule:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+        raise HTTPException(status_code=404, detail="Schedule not found")
     
     update_data = schedule_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -150,7 +175,24 @@ async def update_schedule(
     
     await db.commit()
     await db.refresh(schedule)
-    
-    return {
-        "data": ScheduleResponse.model_validate(schedule)
-    }
+    return {"data": ScheduleResponse.model_validate(schedule)}
+
+
+@router.delete("/schedule/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_schedule(
+    schedule_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a schedule item by ID."""
+    result = await db.execute(
+        select(Schedule).where(
+            Schedule.id == schedule_id,
+            Schedule.user_id == current_user.id,
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    await db.delete(schedule)
+    await db.commit()
