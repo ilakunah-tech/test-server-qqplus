@@ -30,15 +30,92 @@ docker-compose up --build
 
 > При первом запуске автоматически создаются миграции БД и seed данные (5 coffees, 5 batches, 15 roasts, 8 schedule items).
 
-## 📋 Функциональность
+---
 
-- ✅ Полная совместимость API с artisan.plus
-- ✅ Управление инвентарем (coffees, batches)
-- ✅ Записи обжарок (roasts) с загрузкой .alog файлов
-- ✅ Расписание обжарок (schedule)
-- ✅ Многопользовательская система с JWT аутентификацией
-- ✅ WebSocket для real-time уведомлений
-- ✅ Красивый UI в стиле QQ Coffee
+## ✅ Реализовано (v0.2)
+
+### Backend
+- ✅ **PostgreSQL Database Schema** (ЭТАП 1) - 28.01.2026
+  - 6 таблиц: users, coffees, batches, schedules, roasts, alembic_version
+  - 8 foreign keys с правильными каскадами
+  - 18 индексов для оптимизации запросов
+  - Check constraints для валидации данных
+
+- ✅ **REST API (20+ endpoints)** (ЭТАП 2) - 28.01.2026
+  - ✅ Inventory API (coffees, batches) - полный CRUD
+  - ✅ Schedules API (планирование обжарок)
+  - ✅ Roasts API (история обжарок) с .alog файлами
+  - ✅ **Idempotency**: UUID от клиента для roasts
+  - ✅ **Atomic operations**: SELECT FOR UPDATE для batch deduction
+  - ✅ **Auto-complete**: schedules обновляются при создании roast
+  - ✅ **Batch restoration**: восстановление веса при DELETE roast
+  - ✅ Health check endpoints
+
+### Ключевые особенности
+- 🔒 **Concurrency Safety**: предотвращение race conditions
+- 🔄 **Idempotency**: повторные запросы безопасны
+- ⚛️ **ACID Transactions**: атомарность критичных операций
+- 🛡️ **Type Safety**: Decimal для весов, Pydantic валидация
+- 📊 **Filtering & Pagination**: гибкие запросы с фильтрами
+
+---
+
+## 🔜 В разработке
+
+- ⏳ **ЭТАП 3**: Desktop Artisan - Batches Integration (#26)
+- ⏳ **ЭТАП 4**: Desktop Artisan - Schedules Integration (#27)
+- ⏳ **ЭТАП 5**: Desktop Artisan - Roast Sync + Offline Mode (#28)
+- ⏳ **ЭТАП 6**: Testing & Documentation (#29)
+- ⏳ **Notifications System** (#23) - Email/Push уведомления
+
+**Progress**: 2/7 этапов завершено (29%)
+
+---
+
+## 📋 API Endpoints
+
+### Inventory
+```
+GET    /api/v1/inventory/coffees
+POST   /api/v1/inventory/coffees
+GET    /api/v1/inventory/coffees/{id}
+PUT    /api/v1/inventory/coffees/{id}
+DELETE /api/v1/inventory/coffees/{id}
+
+GET    /api/v1/inventory/batches
+POST   /api/v1/inventory/batches
+GET    /api/v1/inventory/batches/{id}
+PUT    /api/v1/inventory/batches/{id}
+DELETE /api/v1/inventory/batches/{id}
+PUT    /api/v1/inventory/batches/{id}/deduct  ⭐ Атомарное списание
+```
+
+### Schedules
+```
+GET    /api/v1/schedule/schedule
+POST   /api/v1/schedule/schedule
+GET    /api/v1/schedule/schedule/{id}
+PUT    /api/v1/schedule/schedule/{id}
+DELETE /api/v1/schedule/schedule/{id}
+```
+
+### Roasts
+```
+GET    /api/v1/roasts/roasts
+POST   /api/v1/roasts/roasts  ⭐ UUID от клиента + идемпотентность
+GET    /api/v1/roasts/{id}
+DELETE /api/v1/roasts/{id}  ⭐ Восстановление batch
+POST   /api/v1/roasts/{id}/upload-profile
+GET    /api/v1/roasts/{id}/profile
+```
+
+### Health
+```
+GET /health
+GET /ping
+```
+
+---
 
 ## 🔌 Синхронизация с Artisan Desktop
 
@@ -69,6 +146,24 @@ Swagger UI: http://localhost:8000/docs
 - **Frontend**: React 18, TypeScript, Vite, shadcn/ui, Tailwind CSS
 - **DevOps**: Docker, docker-compose
 
+## 📈 История изменений
+
+### v0.2 (28.01.2026)
+- ✅ Database schema migration завершён
+- ✅ Backend REST API полностью реализован
+- ✅ Idempotency и atomic operations
+- ✅ 10+ тестов пройдено в Swagger UI
+
+### v0.1 (Январь 2026)
+- ✅ Базовая структура проекта
+- ✅ Docker setup
+- ✅ Frontend UI
+
 ## 📝 Лицензия
 
 MIT
+
+---
+
+**Последнее обновление**: 28 января 2026  
+**Статус**: 🟢 Active Development
