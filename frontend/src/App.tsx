@@ -7,7 +7,10 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { InventoryPage } from '@/pages/InventoryPage';
 import { RoastsPage } from '@/pages/RoastsPage';
+import { RoastDetailPage } from '@/pages/RoastDetailPage';
 import { SchedulePage } from '@/pages/SchedulePage';
+import { BlendsPage } from '@/pages/BlendsPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,11 +64,41 @@ function App() {
             }
           />
           <Route
+            path="/roasts/:id"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <RoastDetailPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/schedule"
             element={
               <ProtectedRoute>
                 <Layout>
                   <SchedulePage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/blends"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <BlendsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <SettingsPage />
                 </Layout>
               </ProtectedRoute>
             }

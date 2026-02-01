@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 from app.db.base import Base
+from app.models.roast import Roast  # for foreign_keys (Roast has coffee_id and reference_for_coffee_id -> coffees)
 
 
 class Coffee(Base):
@@ -22,9 +23,14 @@ class Coffee(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
-    # Relationships
+    # Relationships (Roast has coffee_id and reference_for_coffee_id -> coffees; use coffee_id for roasts)
     batches = relationship("Batch", back_populates="coffee", cascade="all, delete-orphan")
-    roasts = relationship("Roast", back_populates="coffee", cascade="all, delete-orphan")
+    roasts = relationship(
+        "Roast",
+        back_populates="coffee",
+        cascade="all, delete-orphan",
+        foreign_keys=[Roast.coffee_id],
+    )
     schedules = relationship("Schedule", back_populates="coffee", cascade="all, delete-orphan")
     
     # Constraints

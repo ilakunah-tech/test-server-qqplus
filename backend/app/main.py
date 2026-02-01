@@ -19,6 +19,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Static files for uploads
@@ -27,6 +28,8 @@ if os.path.exists(uploads_dir):
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Include routers
+app.include_router(api_router, prefix="/api/v1")
+# Alias for Artisan desktop compatibility (uses /apiv1 without slash)
 app.include_router(api_router, prefix="/apiv1")
 
 # WebSocket

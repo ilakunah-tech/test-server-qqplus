@@ -1,13 +1,26 @@
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
-export const formatDate = (date: string | Date): string => {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, 'yyyy-MM-dd');
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (value == null || value === '') return null;
+  const d = typeof value === 'string' ? parseISO(value) : value;
+  return isValid(d) ? d : null;
+}
+
+export const formatDate = (date: string | Date | null | undefined): string => {
+  const d = toDate(date);
+  return d ? format(d, 'yyyy-MM-dd') : '—';
 };
 
-export const formatDateTime = (date: string | Date): string => {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, 'yyyy-MM-dd HH:mm');
+export const formatDateTime = (date: string | Date | null | undefined): string => {
+  const d = toDate(date);
+  return d ? format(d, 'yyyy-MM-dd HH:mm') : '—';
+};
+
+/** Короткий формат для таблицы: "пт, 30 янв. 2026, 15:23" */
+export const formatDateTimeTable = (date: string | Date | null | undefined): string => {
+  const d = toDate(date);
+  return d ? format(d, 'EEE, d MMM yyyy, HH:mm', { locale: ru }) : '—';
 };
 
 export const formatTime = (seconds: number): string => {

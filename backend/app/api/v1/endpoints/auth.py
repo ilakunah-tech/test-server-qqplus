@@ -42,6 +42,7 @@ async def login(
         "data": {
             "token": access_token,
             "user_id": str(user.id),
+            "email": user.email,
         }
     }
 

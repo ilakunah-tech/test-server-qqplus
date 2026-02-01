@@ -1,12 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { LayoutDashboard, Package, Flame, Calendar } from 'lucide-react';
+import { LayoutDashboard, Package, Flame, Calendar, Layers, Settings } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/roasts', label: 'Roasts', icon: Flame },
   { path: '/schedule', label: 'Schedule', icon: Calendar },
+  { path: '/blends', label: 'Blends', icon: Layers },
+  { path: '/settings', label: 'Настройки', icon: Settings },
 ];
 
 export const Sidebar = () => {

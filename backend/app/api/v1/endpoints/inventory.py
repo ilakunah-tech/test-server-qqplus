@@ -3,12 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
-from typing import Optional
-from datetime import datetime
+from typing import Optional, Any
+from datetime import datetime, timezone
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.coffee import Coffee
 from app.models.batch import Batch
+from app.models.schedule import Schedule
+from app.models.blend import Blend
 from app.schemas.coffee import CoffeeCreate, CoffeeUpdate, CoffeeResponse, CoffeeListResponse
 from app.schemas.batch import (
     BatchCreate,
@@ -18,6 +20,112 @@ from app.schemas.batch import (
 )
 
 router = APIRouter()
+
+
+# ========== ARTISAN-COMPATIBLE STOCK (single endpoint for Artisan desktop) ==========
+
+@router.get("/stock", response_model=dict)
+async def get_stock_artisan(
+    today: Optional[str] = Query(None),
+    lsrt: Optional[float] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Artisan-compatible stock: returns coffees, batches, schedule in the format
+    expected by Artisan desktop (success, result.coffees with stock[], result.schedule, etc.).
+    """
+    # Coffees: list all with stock as single "default" location
+    coffees_result = await db.execute(
+        select(Coffee).order_by(Coffee.created_at.desc())
+    )
+    coffees_rows = coffees_result.scalars().all()
+    coffees: list[dict[str, Any]] = []
+    for c in coffees_rows:
+        amount_kg = float(c.stock_weight_kg) if c.stock_weight_kg is not None else 0.0
+        coffees.append({
+            "id": str(c.id),
+            "hr_id": c.hr_id,
+            "label": c.label,
+            "origin": c.origin,
+            "region": c.region,
+            "variety": c.variety,
+            "processing": c.processing,
+            "moisture": float(c.moisture) if c.moisture is not None else None,
+            "density": float(c.density) if c.density is not None else None,
+            "stock": [
+                {
+                    "location_hr_id": "default",
+                    "location_label": "Stock",
+                    "amount": amount_kg,
+                }
+            ],
+        })
+
+    # Schedule: user's schedule in Artisan ScheduledItem format
+    schedule_result = await db.execute(
+        select(Schedule, Coffee.hr_id)
+        .outerjoin(Coffee, Schedule.coffee_id == Coffee.id)
+        .where(Schedule.user_id == current_user.id)
+        .order_by(Schedule.scheduled_date.desc())
+    )
+    schedule_rows = schedule_result.all()
+    schedule: list[dict[str, Any]] = []
+    for row in schedule_rows:
+        s, coffee_hr_id = row[0], row[1]
+        schedule.append({
+            "_id": str(s.id),
+            "date": s.scheduled_date.isoformat() if s.scheduled_date else "",
+            "title": s.title or "",
+            "amount": float(s.scheduled_weight_kg) if s.scheduled_weight_kg is not None else 0.0,
+            "coffee": coffee_hr_id,
+            "status": s.status,
+        })
+
+    # Blends: user's blends in Artisan format (label, hr_id, ingredients with coffee as hr_id)
+    blends_result = await db.execute(
+        select(Blend)
+        .where(Blend.user_id == current_user.id)
+        .order_by(Blend.created_at.desc())
+    )
+    blends_rows = blends_result.scalars().all()
+    blends: list[dict[str, Any]] = []
+    for b in blends_rows:
+        ingredients: list[dict[str, Any]] = []
+        for comp in (b.recipe or []):
+            coffee_id = comp.get("coffee_id")
+            percentage = comp.get("percentage", 0)
+            coffee_hr_id = None
+            if coffee_id:
+                coffee_uuid = coffee_id if isinstance(coffee_id, UUID) else UUID(str(coffee_id))
+                c_res = await db.execute(select(Coffee.hr_id).where(Coffee.id == coffee_uuid))
+                coffee_hr_id = c_res.scalar_one_or_none() or str(coffee_id)
+            ingredients.append({
+                "ratio": float(percentage) / 100.0 if percentage is not None else 0,
+                "coffee": coffee_hr_id or "",
+            })
+        blends.append({
+            "hr_id": str(b.id),
+            "label": b.name or "",
+            "ingredients": ingredients,
+        })
+
+    server_time_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    result = {
+        "coffees": coffees,
+        "batches": [],
+        "schedule": schedule,
+        "blends": blends,
+        "replBlends": [],
+        "serverTime": server_time_ms,
+    }
+    return {
+        "success": True,
+        "result": result,
+        "ol": {},
+        "pu": "",
+        "notifications": {"unqualified": 0, "machines": []},
+    }
 
 
 def generate_hr_id(origin: str, region: str, year: int, sequence: int) -> str:

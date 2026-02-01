@@ -25,7 +25,7 @@ export const DashboardPage = () => {
   const totalCoffees = coffeesData?.data.total || 0;
   const totalRoasts = roastsData?.data.total || 0;
   const pendingSchedules = scheduleData?.data.items.filter(s => s.status === 'pending').length || 0;
-  const totalRoasted = roastsData?.data.items.reduce((sum, r) => sum + r.roasted_weight_kg, 0) || 0;
+  const totalRoasted = roastsData?.data.items?.reduce((sum, r) => sum + (Number(r.roasted_weight_kg) || 0), 0) ?? 0;
 
   const stats = [
     {
@@ -86,24 +86,29 @@ export const DashboardPage = () => {
             <CardTitle>Recent Roasts</CardTitle>
           </CardHeader>
           <CardContent>
-            {roastsData?.data.items.length ? (
+            {(roastsData?.data?.items?.length ?? 0) > 0 ? (
               <div className="space-y-2">
-                {roastsData.data.items.slice(0, 5).map((roast) => (
+                {(roastsData!.data.items).slice(0, 5).map((roast) => {
+                  const dateStr = roast.roasted_at ?? roast.roast_date;
+                  const weightKg = Number(roast.roasted_weight_kg) || 0;
+                  const lossPct = roast.weight_loss_percent;
+                  return (
                   <div key={roast.id} className="flex justify-between items-center py-2 border-b last:border-0">
                     <div>
-                      <p className="font-medium">{roast.operator || 'Unknown'}</p>
+                      <p className="font-medium">{roast.title ?? roast.operator ?? '—'}</p>
                       <p className="text-sm text-gray-500">
-                        {new Date(roast.roast_date).toLocaleDateString()}
+                        {dateStr ? new Date(dateStr).toLocaleDateString() : '—'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">{formatWeight(roast.roasted_weight_kg)}</p>
+                      <p className="font-medium">{formatWeight(weightKg)}</p>
                       <p className="text-sm text-gray-500">
-                        {roast.weight_loss_percent?.toFixed(1)}% loss
+                        {lossPct != null ? `${lossPct.toFixed(1)}% loss` : '—'}
                       </p>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-gray-500">No roasts yet</p>

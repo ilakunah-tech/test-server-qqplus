@@ -21,7 +21,7 @@ from app.schemas.schedule import (
 router = APIRouter()
 
 
-@router.get("/schedule", response_model=dict)
+@router.get("", response_model=dict)
 async def list_schedule(
     limit: int = Query(100, ge=1, le=10000),
     offset: int = Query(0, ge=0),
@@ -67,7 +67,7 @@ async def list_schedule(
     }
 
 
-@router.post("/schedule", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: AsyncSession = Depends(get_db),
@@ -100,7 +100,7 @@ async def create_schedule(
     return {"data": ScheduleResponse.model_validate(schedule)}
 
 
-@router.get("/schedule/{schedule_id}", response_model=dict)
+@router.get("/{schedule_id}", response_model=dict)
 async def get_schedule(
     schedule_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -119,7 +119,7 @@ async def get_schedule(
     return {"data": ScheduleResponse.model_validate(schedule)}
 
 
-@router.put("/schedule/{schedule_id}/complete", response_model=dict)
+@router.put("/{schedule_id}/complete", response_model=dict)
 async def complete_schedule(
     schedule_id: UUID,
     complete_data: ScheduleCompleteRequest,
@@ -154,7 +154,7 @@ async def complete_schedule(
     }
 
 
-@router.put("/schedule/{schedule_id}", response_model=dict)
+@router.put("/{schedule_id}", response_model=dict)
 async def update_schedule(
     schedule_id: UUID,
     schedule_data: ScheduleUpdate,
@@ -178,7 +178,17 @@ async def update_schedule(
     return {"data": ScheduleResponse.model_validate(schedule)}
 
 
-@router.delete("/schedule/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/lock", response_model=dict)
+async def lock_schedule(
+    today: Optional[date] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Artisan-compatible: lock schedule (no-op for local server)."""
+    return {"success": True}
+
+
+@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_schedule(
     schedule_id: UUID,
     db: AsyncSession = Depends(get_db),
