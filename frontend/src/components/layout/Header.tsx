@@ -17,12 +17,20 @@ export const Header = ({ sidebarOpen = true, onToggleSidebar }: HeaderProps) => 
   }
 
   return (
-    <header className="relative w-full overflow-hidden">
+    <header className="sticky top-0 z-50 relative w-full overflow-hidden">
       <img
         src="/resized-image.png"
         alt=""
         className="block w-full h-auto"
         role="presentation"
+      />
+      <div
+        className="absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(17,24,39,0.35) 0%, rgba(17,24,39,0.10) 45%, rgba(17,24,39,0.35) 100%)',
+        }}
       />
       <div className="absolute inset-0 flex items-center justify-between container mx-auto px-4">
         <div className="flex items-center gap-4">
@@ -38,10 +46,12 @@ export const Header = ({ sidebarOpen = true, onToggleSidebar }: HeaderProps) => 
               {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
             </Button>
           )}
-          <img src="/загруженное.png" alt="QQ Coffee" className="h-12 md:h-14 w-auto shrink-0 drop-shadow-lg" />
+          <a href="/dashboard" className="inline-flex items-center">
+            <img src="/загруженное.png" alt="QQ Coffee" className="h-12 md:h-14 w-auto shrink-0 drop-shadow-lg" />
+          </a>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-white">
+          <div className="hidden sm:flex items-center gap-2 text-sm text-white">
             {isConnected ? (
               <>
                 <Wifi className="w-4 h-4 text-green-300" />
