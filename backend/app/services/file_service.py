@@ -362,4 +362,7 @@ def ensure_artisan_background_profile(data: dict) -> dict:
         out["mode"] = "C"
     if "computed" not in out:
         out["computed"] = {}
+    # Beans field (for reference profiles)
+    if "beans" not in out:
+        out["beans"] = ""
     return out

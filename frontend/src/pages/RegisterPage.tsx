@@ -4,6 +4,7 @@ import { authApi } from '../api/auth';
 import { authStore } from '../store/authStore';
 
 export const RegisterPage = () => {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -16,6 +17,11 @@ export const RegisterPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!username.trim()) {
+      setError('Username is required');
+      return;
+    }
     
     if (password !== passwordConfirm) {
       setError('Passwords do not match');
@@ -30,8 +36,14 @@ export const RegisterPage = () => {
     setIsLoading(true);
     
     try {
-      const response = await authApi.register(email, password, passwordConfirm);
-      login(response.data.token, response.data.user_id);
+      const response = await authApi.register(username.trim(), email, password, passwordConfirm);
+      login(
+        response.data.token,
+        response.data.user_id,
+        response.data.email ?? email,
+        response.data.role ?? 'user',
+        (response.data as { username?: string }).username ?? username
+      );
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed');
@@ -63,6 +75,22 @@ export const RegisterPage = () => {
           )}
           
           <div className="space-y-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                required
+                minLength={1}
+                maxLength={64}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#844392]"
+                placeholder="Display name"
+              />
+            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email

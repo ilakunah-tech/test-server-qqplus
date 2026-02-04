@@ -19,6 +19,7 @@ class Coffee(Base):
     processing = Column(String(100), nullable=True)
     moisture = Column(Numeric(4, 2), nullable=True)
     density = Column(Numeric(6, 2), nullable=True)
+    water_activity = Column(Numeric(3, 2), nullable=True)
     stock_weight_kg = Column(Numeric(10, 3), nullable=False, default=0.000)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

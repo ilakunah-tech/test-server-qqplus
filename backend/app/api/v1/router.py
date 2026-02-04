@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, inventory, roasts, schedule, health, blends, notifications, machines
+from app.api.v1.endpoints import auth, inventory, roasts, schedule, health, blends, notifications, machines, goals, production_tasks
 from app.api.v1.endpoints.roasts import create_or_update_roast, get_roast
 
 api_router = APIRouter()
@@ -13,7 +13,7 @@ api_router.include_router(machines.router, prefix="/machines", tags=["machines"]
 # Inventory
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 
-# Roasts (web UI and Artisan)
+# Roasts (web UI and Artisan) - includes goals endpoints nested under /goals
 api_router.include_router(roasts.router, prefix="/roasts", tags=["roasts"])
 
 # Artisan desktop: POST/GET на /api/v1/aroast (без /roasts в пути)
@@ -29,6 +29,9 @@ api_router.include_router(schedule.router, prefix="/schedule", tags=["schedule"]
 
 # Notifications (WebSocket)
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+
+# Production Tasks
+api_router.include_router(production_tasks.router, prefix="/production-tasks", tags=["production-tasks"])
 
 # Health check
 api_router.include_router(health.router, tags=["health"])

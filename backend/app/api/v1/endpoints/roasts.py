@@ -16,11 +16,12 @@ import zipfile
 from pathlib import Path
 import logging
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Header, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Header, BackgroundTasks
+from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, and_
 from uuid import UUID
-from typing import Optional, Any
+from typing import Optional, Any, List
 from datetime import datetime, date, timezone, timedelta
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -31,12 +32,20 @@ from app.models.schedule import Schedule
 from app.models.coffee import Coffee
 from app.models.blend import Blend
 from app.models.idempotency import IdempotencyCache
+from app.models.roast_goal import RoastGoal
 from app.schemas.roast import (
     RoastCreate,
+    RoastUpdate,
     RoastResponse,
     TelemetryData,
     CreateReferenceBody,
     ReplaceReferenceBody,
+)
+from app.schemas.roast_goal import (
+    RoastGoalCreate,
+    RoastGoalUpdate,
+    RoastGoalResponse,
+    GoalParameterConfig,
 )
 from app.services.file_service import (
     save_alog_file,
@@ -48,6 +57,9 @@ from app.services.file_service import (
     ensure_artisan_background_profile,
 )
 from app.services.blend_calculator import calculate_blend_available_weight
+from app.services.goals_service import check_roast_against_goals
+from app.services.task_scheduler import check_counter_tasks
+from app.models.user_machine import UserMachine
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 router = APIRouter()
@@ -101,6 +113,20 @@ def _parse_roast_id(roast_id_str: str) -> UUID:
     if len(s) == 32 and all(c in "0123456789abcdef" for c in s):
         return UUID(hex=s)
     return UUID(roast_id_str)
+
+
+def _parse_schedule_id(body: dict) -> Optional[UUID]:
+    """Parse schedule_id from body. Artisan sends s_item_id, web may send schedule_id."""
+    raw = body.get("schedule_id") or body.get("s_item_id")
+    if not raw:
+        return None
+    try:
+        s = str(raw).strip().replace("-", "").lower()
+        if len(s) == 32 and all(c in "0123456789abcdef" for c in s):
+            return UUID(hex=s)
+        return UUID(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 def _parse_artisan_date(date_str: Any) -> datetime:
@@ -166,10 +192,78 @@ def _roast_to_response(roast: Roast) -> RoastResponse:
     return RoastResponse.model_validate(data)
 
 
+async def _enrich_roast_from_profile(roast: Roast, db: AsyncSession) -> dict[str, Any]:
+    """
+    Extract operator, DEV_time, DEV_ratio, weight_loss from roast's .alog profile
+    when they are missing in the Roast record. Used to populate list/detail responses.
+    """
+    out: dict[str, Any] = {}
+    if roast.operator is not None and roast.DEV_time is not None and roast.DEV_ratio is not None and roast.weight_loss is not None:
+        return out  # Nothing to enrich
+
+    profile_data: dict | None = None
+    # Try roast_profiles blob first
+    rp_result = await db.execute(select(RoastProfile).where(RoastProfile.roast_id == roast.id))
+    rp = rp_result.scalar_one_or_none()
+    if rp and rp.data:
+        try:
+            fd, temp_path = tempfile.mkstemp(suffix=".alog", prefix="roast_")
+            try:
+                os.write(fd, rp.data)
+            finally:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            try:
+                profile_data = read_and_parse_alog(Path(temp_path))
+                profile_data = compute_computed_from_timeindex(profile_data)
+            finally:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+        except (json.JSONDecodeError, ValueError, zipfile.BadZipFile):
+            pass
+
+    if profile_data is None and roast.alog_file_path:
+        alog_path = Path(f"/app{roast.alog_file_path}")
+        if alog_path.exists():
+            try:
+                profile_data = read_and_parse_alog(alog_path)
+                profile_data = compute_computed_from_timeindex(profile_data)
+            except (json.JSONDecodeError, ValueError, zipfile.BadZipFile):
+                pass
+
+    if not profile_data:
+        return out
+
+    if roast.operator is None and profile_data.get("operator"):
+        out["operator"] = str(profile_data["operator"]).strip() or None
+
+    computed = profile_data.get("computed") or {}
+    if roast.DEV_time is None:
+        fin = computed.get("finishphasetime")
+        if fin is not None:
+            out["DEV_time"] = int(fin) if isinstance(fin, (int, float)) else None
+    if roast.DEV_ratio is None:
+        tot = computed.get("totaltime") or computed.get("DROP_time")
+        fin = computed.get("finishphasetime")
+        if tot and tot > 0 and fin is not None:
+            pct = (float(fin) / float(tot)) * 100
+            out["DEV_ratio"] = round(pct, 1)
+    if roast.weight_loss is None:
+        wl = computed.get("weight_loss")
+        if wl is not None:
+            out["weight_loss"] = float(wl) if float(wl) <= 1 else float(wl) / 100.0
+
+    return out
+
+
 def _roast_to_artisan_result(roast: Roast) -> dict[str, Any]:
     """Convert Roast to Artisan-compatible result dict."""
     modified = roast.modified_at or roast.updated_at or roast.roasted_at
-    return {
+    result = {
         "roast_id": str(roast.id),
         "modified_at": modified.isoformat() if modified else None,
         "date": roast.roasted_at.isoformat() if roast.roasted_at else None,
@@ -179,6 +273,10 @@ def _roast_to_artisan_result(roast: Roast) -> dict[str, Any]:
         "blend_id": str(roast.blend_id) if roast.blend_id else None,
         "message": "Roast saved successfully",
     }
+    # Add reference_profile_id if present (for Artisan to load background)
+    if roast.reference_profile_id:
+        result["reference_profile_id"] = str(roast.reference_profile_id)
+    return result
 
 
 def _artisan_response(content: dict[str, Any], status_code: int = 200) -> JSONResponse:
@@ -242,6 +340,46 @@ async def _cleanup_old_idempotency(db: AsyncSession) -> None:
 
 # ==================== ENDPOINTS ====================
 
+# Goals endpoints must be registered BEFORE the catch-all "" route
+# ==================== GOALS ENDPOINTS (nested under /roasts/goals) ====================
+
+@router.get("/goals")
+async def list_goals(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all roast goals."""
+    try:
+        logger.info(f"GET /goals called")
+        query = select(RoastGoal).order_by(RoastGoal.created_at.desc())
+        
+        result = await db.execute(query)
+        goals = result.scalars().all()
+        logger.info(f"Found {len(goals)} goals in DB, returning them")
+        # Convert to dict for JSON serialization
+        goals_list = [
+            {
+                "id": str(goal.id),
+                "name": goal.name,
+                "goal_type": goal.goal_type,
+                "is_active": goal.is_active,
+                "failed_status": goal.failed_status,
+                "missing_value_status": goal.missing_value_status,
+                "parameters": goal.parameters or {},
+                "created_at": goal.created_at.isoformat() if goal.created_at else None,
+                "updated_at": goal.updated_at.isoformat() if goal.updated_at else None,
+            }
+            for goal in goals
+        ]
+        logger.info(f"Returning {len(goals_list)} goals")
+        return goals_list
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing goals: {e}", exc_info=True, stack_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get("", response_model=dict)
 async def list_roasts(
     limit: int = Query(100, ge=1, le=10000),
@@ -250,10 +388,11 @@ async def list_roasts(
     date_to: Optional[date] = Query(None),
     coffee_id: Optional[UUID] = Query(None),
     batch_id: Optional[UUID] = Query(None),
+    in_quality_control: Optional[bool] = Query(None, description="Filter by quality control flag"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all roasts with optional filters (date range, coffee_id, batch_id). All users can see all roasts."""
+    """List all roasts with optional filters (date range, coffee_id, batch_id, in_quality_control). All users can see all roasts."""
     # NOTE: No user_id filter - all users can see all roasts
     query = select(Roast)
     count_query = select(func.count()).select_from(Roast)
@@ -272,6 +411,9 @@ async def list_roasts(
     if batch_id:
         query = query.where(Roast.batch_id == batch_id)
         count_query = count_query.where(Roast.batch_id == batch_id)
+    if in_quality_control is not None:
+        query = query.where(Roast.in_quality_control == in_quality_control)
+        count_query = count_query.where(Roast.in_quality_control == in_quality_control)
 
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
@@ -279,9 +421,27 @@ async def list_roasts(
         query.order_by(Roast.roasted_at.desc()).limit(limit).offset(offset)
     )
     roasts = result.scalars().all()
+
+    items = []
+    for r in roasts:
+        resp = _roast_to_response(r).model_dump(mode="json")
+        enriched = await _enrich_roast_from_profile(r, db)
+        if enriched:
+            resp.update(enriched)
+        # Check goals status (only if there are active goals)
+        try:
+            goals_check = await check_roast_against_goals(r, db)
+            if goals_check:
+                resp["goals_status"] = goals_check["status"]  # "green" | "yellow" | "red"
+            # Если goals_check == None, значит нет активных целей - не устанавливаем статус
+        except Exception as e:
+            logger.warning(f"Error checking goals for roast {r.id}: {e}")
+            # Не устанавливаем статус при ошибке, если нет активных целей
+        items.append(resp)
+
     return {
         "data": {
-            "items": [_roast_to_response(r) for r in roasts],
+            "items": items,
             "total": total,
         }
     }
@@ -321,13 +481,13 @@ async def list_references(
                 pass
     if resolved_coffee_id is not None and resolved_blend_id is not None:
         raise HTTPException(status_code=400, detail="Pass either coffee or blend, not both")
-    if resolved_coffee_id is None and resolved_blend_id is None:
-        raise HTTPException(status_code=400, detail="Pass coffee_id, blend_id, coffee_hr_id, or blend_hr_id")
+
     query = select(Roast).where(Roast.is_reference == True)
     if resolved_coffee_id is not None:
         query = query.where(Roast.reference_for_coffee_id == resolved_coffee_id)
-    else:
+    elif resolved_blend_id is not None:
         query = query.where(Roast.reference_for_blend_id == resolved_blend_id)
+    # If both None: return all reference roasts (no coffee/blend filter)
 
     machine_clean = machine.strip() if machine and machine.strip() else None
     if machine_clean:
@@ -337,19 +497,28 @@ async def list_references(
     query = query.order_by(Roast.roasted_at.desc())
     result = await db.execute(query)
     roasts = result.scalars().all()
-    # Fallback: if filter by machine returned nothing, return references for this coffee/blend without machine filter
+    # Fallback: if filter by machine returned nothing, return references without machine filter
     if not roasts and machine_clean:
         query_fb = select(Roast).where(Roast.is_reference == True)
         if resolved_coffee_id is not None:
             query_fb = query_fb.where(Roast.reference_for_coffee_id == resolved_coffee_id)
-        else:
+        elif resolved_blend_id is not None:
             query_fb = query_fb.where(Roast.reference_for_blend_id == resolved_blend_id)
         query_fb = query_fb.order_by(Roast.roasted_at.desc())
         result_fb = await db.execute(query_fb)
         roasts = result_fb.scalars().all()
+
+    ref_items = []
+    for r in roasts:
+        resp = _roast_to_response(r).model_dump(mode="json")
+        enriched = await _enrich_roast_from_profile(r, db)
+        if enriched:
+            resp.update(enriched)
+        ref_items.append(resp)
+
     return {
         "data": {
-            "items": [_roast_to_response(r) for r in roasts],
+            "items": ref_items,
             "total": len(roasts),
         }
     }
@@ -486,6 +655,31 @@ async def create_or_update_roast(
                 existing_roast.ground_color = int(body["ground_color"])
             if body.get("cupping_score") is not None:
                 existing_roast.cupping_score = int(body["cupping_score"])
+            
+            # Extract reference_profile_id from template field (Artisan sends template with 'id' field containing UUID)
+            template_data = body.get("template")
+            if template_data is not None:
+                if isinstance(template_data, dict):
+                    template_id = template_data.get("id")
+                    if template_id:
+                        try:
+                            template_uuid = _parse_roast_id(template_id)
+                            # Verify that this UUID exists and is a reference profile
+                            ref_result = await db.execute(
+                                select(Roast).where(Roast.id == template_uuid, Roast.is_reference == True)
+                            )
+                            ref_roast = ref_result.scalar_one_or_none()
+                            if ref_roast:
+                                existing_roast.reference_profile_id = template_uuid
+                            else:
+                                # If template_id doesn't exist or is not a reference, clear reference_profile_id
+                                existing_roast.reference_profile_id = None
+                        except (ValueError, TypeError):
+                            # Invalid UUID format, clear reference_profile_id
+                            existing_roast.reference_profile_id = None
+                else:
+                    # template is None or empty dict, clear reference_profile_id
+                    existing_roast.reference_profile_id = None
             
             # Update modified_at
             existing_roast.modified_at = datetime.now(timezone.utc)
@@ -643,7 +837,7 @@ async def create_or_update_roast(
         coffee_id=coffee_id_val,
         blend_id=blend_id_val,
         batch_id=UUID(body["batch_id"]) if body.get("batch_id") else None,
-        schedule_id=UUID(body["schedule_id"]) if body.get("schedule_id") else None,
+        schedule_id=_parse_schedule_id(body),
         
         # Batch identification
         batch_number=int(body.get("batch_number", 0)),
@@ -721,6 +915,26 @@ async def create_or_update_roast(
         notes=body.get("notes"),
         deducted_components=deducted_components if deducted_components else None,
     )
+    
+    # Extract reference_profile_id from template field (Artisan sends template with 'id' field containing UUID)
+    template_data = body.get("template")
+    if template_data and isinstance(template_data, dict):
+        template_id = template_data.get("id")
+        if template_id:
+            try:
+                # Try to parse as UUID (could be string UUID or hex)
+                template_uuid = _parse_roast_id(template_id)
+                # Verify that this UUID exists and is a reference profile
+                ref_result = await db.execute(
+                    select(Roast).where(Roast.id == template_uuid, Roast.is_reference == True)
+                )
+                ref_roast = ref_result.scalar_one_or_none()
+                if ref_roast:
+                    roast.reference_profile_id = template_uuid
+            except (ValueError, TypeError):
+                # Invalid UUID format, skip
+                pass
+    
     db.add(roast)
     
     # 15. Handle schedule completion
@@ -735,6 +949,28 @@ async def create_or_update_roast(
     
     await db.commit()
     await db.refresh(roast)
+    
+    # 15.5. Check counter tasks if machine is specified
+    machine_id = None
+    if roast.machine:
+        # Try to find UserMachine by name
+        machine_query = select(UserMachine).where(
+            and_(
+                UserMachine.name == roast.machine,
+                UserMachine.user_id == current_user.id
+            )
+        )
+        machine_result = await db.execute(machine_query)
+        machine = machine_result.scalar_one_or_none()
+        if machine:
+            machine_id = machine.id
+    
+    # Check counter tasks (async, non-blocking)
+    if machine_id or True:  # Check all counter tasks (including those without machine filter)
+        try:
+            await check_counter_tasks(db, roast.id, machine_id)
+        except Exception as e:
+            logger.error(f"Error checking counter tasks: {e}", exc_info=True)
     
     response_data = {
         "data": _roast_to_response(roast).model_dump(mode="json"),
@@ -783,11 +1019,87 @@ async def get_roast(
         if server_ms <= modified_at:
             return Response(status_code=204)
     
+    resp_data = _roast_to_response(roast).model_dump(mode="json")
+    enriched = await _enrich_roast_from_profile(roast, db)
+    if enriched:
+        resp_data.update(enriched)
     res = {
-        "data": _roast_to_response(roast).model_dump(mode="json"),
+        "data": resp_data,
         "result": _roast_to_artisan_result(roast),
     }
     return _artisan_response(res)
+
+
+@router.patch("/{roast_id}", response_model=dict)
+async def patch_roast(
+    roast_id: str,
+    body: RoastUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Partial update of a roast (e.g. for Quality Control: notes, cupping_score, label).
+    """
+    try:
+        roast_uuid = _parse_roast_id(roast_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid roast_id format")
+    result = await db.execute(select(Roast).where(Roast.id == roast_uuid))
+    roast = result.scalar_one_or_none()
+    if not roast:
+        raise HTTPException(status_code=404, detail="Roast not found")
+    payload = body.model_dump(exclude_unset=True)
+    if not payload:
+        return {"data": _roast_to_response(roast).model_dump(mode="json")}
+    if "roasted_at" in payload:
+        roast.roasted_at = payload["roasted_at"]
+    if "green_weight_kg" in payload:
+        roast.green_weight_kg = Decimal(str(payload["green_weight_kg"]))
+    if "roasted_weight_kg" in payload:
+        roast.roasted_weight_kg = Decimal(str(payload["roasted_weight_kg"])) if payload["roasted_weight_kg"] is not None else None
+    if "title" in payload:
+        roast.title = (str(payload["title"])[:255] if payload["title"] else None)
+    if "roast_level" in payload:
+        roast.roast_level = (str(payload["roast_level"])[:50] if payload["roast_level"] else None)
+    if "notes" in payload:
+        roast.notes = (str(payload["notes"])[:2000] if payload["notes"] else None)
+    if "batch_number" in payload:
+        roast.batch_number = int(payload["batch_number"])
+    if "label" in payload:
+        roast.label = (str(payload["label"])[:255] if payload["label"] else "") or roast.label
+    if "machine" in payload:
+        roast.machine = (str(payload["machine"])[:100] if payload["machine"] else None)
+    if "operator" in payload:
+        roast.operator = (str(payload["operator"])[:100] if payload["operator"] else None)
+    if "email" in payload:
+        roast.email = (str(payload["email"])[:255] if payload["email"] else None)
+    if "whole_color" in payload:
+        roast.whole_color = int(payload["whole_color"])
+    if "ground_color" in payload:
+        roast.ground_color = int(payload["ground_color"])
+    if "cupping_score" in payload:
+        roast.cupping_score = int(payload["cupping_score"])
+    if "cupping_date" in payload:
+        roast.cupping_date = payload["cupping_date"]  # date or None
+    if "cupping_verdict" in payload:
+        v = payload["cupping_verdict"]
+        roast.cupping_verdict = (str(v)[:20] if v else None)
+    if "espresso_date" in payload:
+        roast.espresso_date = payload["espresso_date"]
+    if "espresso_verdict" in payload:
+        v = payload["espresso_verdict"]
+        roast.espresso_verdict = (str(v)[:20] if v else None)
+    if "espresso_notes" in payload:
+        roast.espresso_notes = (str(payload["espresso_notes"])[:2000] if payload["espresso_notes"] else None)
+    if "reference_beans_notes" in payload:
+        roast.reference_beans_notes = (str(payload["reference_beans_notes"]) if payload["reference_beans_notes"] else None)
+    if "in_quality_control" in payload:
+        roast.in_quality_control = bool(payload["in_quality_control"])
+    roast.modified_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(roast)
+    resp_data = _roast_to_response(roast).model_dump(mode="json")
+    return {"data": resp_data}
 
 
 @router.delete("/{roast_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -969,6 +1281,48 @@ async def upload_profile(
         rp.data = content
     else:
         db.add(RoastProfile(roast_id=roast_uuid, data=content))
+
+    # Backfill roast from parsed profile (operator, DEV_time, DEV_ratio, weight_loss)
+    try:
+        fd, temp_path = tempfile.mkstemp(suffix=".alog", prefix="roast_")
+        try:
+            os.write(fd, content)
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            profile_data = read_and_parse_alog(Path(temp_path))
+            profile_data = compute_computed_from_timeindex(profile_data)
+            # Backfill label from title if not set
+            if (roast.label is None or roast.label == "") and profile_data.get("title"):
+                roast.label = str(profile_data["title"]).strip()[:255] or None
+            if roast.operator is None and profile_data.get("operator"):
+                roast.operator = str(profile_data["operator"]).strip() or None
+            computed = profile_data.get("computed") or {}
+            if roast.DEV_time is None:
+                fin = computed.get("finishphasetime")
+                if fin is not None:
+                    roast.DEV_time = int(fin) if isinstance(fin, (int, float)) else None
+            if roast.DEV_ratio is None:
+                tot = computed.get("totaltime") or computed.get("DROP_time")
+                fin = computed.get("finishphasetime")
+                if tot and float(tot) > 0 and fin is not None:
+                    roast.DEV_ratio = round((float(fin) / float(tot)) * 100, 1)
+            if roast.weight_loss is None:
+                wl = computed.get("weight_loss")
+                if wl is not None:
+                    vl = float(wl)
+                    roast.weight_loss = vl if vl > 1 else vl * 100.0
+        finally:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+    except (json.JSONDecodeError, ValueError, zipfile.BadZipFile):
+        pass
+
     await db.commit()
     return {"data": {"alog_file_path": profile_path}}
 
@@ -1064,6 +1418,9 @@ async def get_profile_data(
         try:
             data = read_and_parse_alog(Path(temp_path))
             data = compute_computed_from_timeindex(data)
+            # Add beans from reference_beans_notes if available (overrides .alog beans for reference profiles)
+            if roast.is_reference and roast.reference_beans_notes:
+                data["beans"] = roast.reference_beans_notes
             return ensure_artisan_background_profile(data)
         except (json.JSONDecodeError, ValueError, zipfile.BadZipFile) as e:
             logger.warning(f"Failed to parse .alog blob for roast {roast_uuid}: {e}")
@@ -1081,6 +1438,9 @@ async def get_profile_data(
             # Fill or supplement 'computed' from timeindex + timex/temp1/temp2
             # NOTE: In Artisan .alog format: temp1 = ET, temp2 = BT
             data = compute_computed_from_timeindex(data)
+            # Add beans from reference_beans_notes if available (overrides .alog beans for reference profiles)
+            if roast.is_reference and roast.reference_beans_notes:
+                data["beans"] = roast.reference_beans_notes
             return ensure_artisan_background_profile(data)
         except (json.JSONDecodeError, ValueError, zipfile.BadZipFile) as e:
             # If .alog file is corrupted, fall through to DB telemetry
@@ -1153,6 +1513,9 @@ async def get_profile_data(
             "roastertype": roast.machine,
             "computed": computed,
         }
+        # Add beans from reference_beans_notes if available
+        if roast.is_reference and roast.reference_beans_notes:
+            out["beans"] = roast.reference_beans_notes
         return ensure_artisan_background_profile(out)
     
     # PRIORITY 3: No telemetry, no .alog file - build minimal profile from roast record
@@ -1198,4 +1561,116 @@ async def get_profile_data(
         "temp2": [],
         "computed": computed,
     }
+    # Add beans from reference_beans_notes if available
+    if roast.is_reference and roast.reference_beans_notes:
+        out["beans"] = roast.reference_beans_notes
     return ensure_artisan_background_profile(out)
+
+
+# Remaining goals endpoints (GET by ID, POST, PATCH, DELETE)
+@router.get("/goals/{goal_id}", response_model=RoastGoalResponse)
+async def get_goal_by_id(
+    goal_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a specific roast goal."""
+    result = await db.execute(select(RoastGoal).where(RoastGoal.id == goal_id))
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+    return goal
+
+
+@router.post("/goals", status_code=status.HTTP_201_CREATED)
+async def create_goal_endpoint(
+    goal_data: RoastGoalCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new roast goal."""
+    try:
+        logger.info(f"Creating goal: {goal_data.name}, parameters: {len(goal_data.parameters)}")
+        goal = RoastGoal(
+            name=goal_data.name,
+            goal_type=goal_data.goal_type,
+            is_active=goal_data.is_active,
+            failed_status=goal_data.failed_status,
+            missing_value_status=goal_data.missing_value_status,
+            parameters={
+                param_name: {"enabled": param_config.enabled, "tolerance": param_config.tolerance}
+                for param_name, param_config in goal_data.parameters.items()
+            },
+        )
+        db.add(goal)
+        await db.commit()
+        await db.refresh(goal)
+        logger.info(f"Goal created successfully: {goal.id}")
+        # Return as dict for consistency
+        return {
+            "id": str(goal.id),
+            "name": goal.name,
+            "goal_type": goal.goal_type,
+            "is_active": goal.is_active,
+            "failed_status": goal.failed_status,
+            "missing_value_status": goal.missing_value_status,
+            "parameters": goal.parameters or {},
+            "created_at": goal.created_at.isoformat() if goal.created_at else None,
+            "updated_at": goal.updated_at.isoformat() if goal.updated_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error creating goal: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/goals/{goal_id}", response_model=RoastGoalResponse)
+async def update_goal_endpoint(
+    goal_id: UUID,
+    goal_data: RoastGoalUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a roast goal."""
+    result = await db.execute(select(RoastGoal).where(RoastGoal.id == goal_id))
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+    
+    update_data = goal_data.model_dump(exclude_unset=True)
+    if "parameters" in update_data and update_data["parameters"]:
+        # Convert Pydantic models to dicts if needed
+        if isinstance(update_data["parameters"], dict):
+            new_params = {}
+            for param_name, param_config in update_data["parameters"].items():
+                if isinstance(param_config, dict):
+                    # Already a dict (from JSONB)
+                    new_params[param_name] = param_config
+                else:
+                    # Pydantic model
+                    new_params[param_name] = {"enabled": param_config.enabled, "tolerance": param_config.tolerance}
+            update_data["parameters"] = new_params
+    
+    for key, value in update_data.items():
+        setattr(goal, key, value)
+    
+    await db.commit()
+    await db.refresh(goal)
+    return goal
+
+
+@router.delete("/goals/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_goal_endpoint(
+    goal_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a roast goal."""
+    result = await db.execute(select(RoastGoal).where(RoastGoal.id == goal_id))
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+    
+    await db.delete(goal)
+    await db.commit()
+    return None

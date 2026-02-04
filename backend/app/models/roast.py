@@ -1,7 +1,7 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Numeric, Integer, Float, Boolean
+from sqlalchemy import Column, String, Text, DateTime, Date, ForeignKey, Numeric, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 from app.db.base import Base
 
 
@@ -26,7 +26,8 @@ class Roast(Base):
     schedule_id = Column(UUID(as_uuid=True), ForeignKey("schedules.id", ondelete="SET NULL"), nullable=True)
     
     # Batch identification
-    batch_number = Column(Integer, nullable=False, default=0)
+    batch_number = Column(Integer, nullable=False, default=0)  # From Artisan (roastbatchnr)
+    roast_seq = Column(Integer, nullable=False, server_default=text("nextval('roast_seq_global')"))  # Global server counter
     label = Column(String(255), nullable=False, default='')
     
     # ==================== TIMESTAMPS ====================
@@ -37,7 +38,7 @@ class Roast(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # ==================== WEIGHTS (kg) ====================
-    green_weight_kg = Column(Numeric(10, 3), nullable=False)  # "amount" in Artisan
+    green_weight_kg = Column(Numeric(10, 3), nullable=True)  # "amount" in Artisan (can be NULL if unknown)
     roasted_weight_kg = Column(Numeric(10, 3), nullable=True)  # "end_weight" in Artisan
     weight_loss = Column(Float, nullable=True)  # percentage
     defects_weight = Column(Float, nullable=False, default=0)  # kg
@@ -105,6 +106,13 @@ class Roast(Base):
     # Format: [CHARGE, DRY_END, FC_START, FC_END, SC_START, SC_END, DROP, COOL_END]
     timeindex = Column(JSONB, nullable=True)
     
+    # ==================== QUALITY CONTROL (cupping / espresso) ====================
+    cupping_date = Column(Date, nullable=True)  # date of cupping
+    cupping_verdict = Column(String(20), nullable=True)  # green / yellow / red
+    espresso_date = Column(Date, nullable=True)  # date of espresso brew
+    espresso_verdict = Column(String(20), nullable=True)  # green / yellow / red
+    espresso_notes = Column(Text, nullable=True)
+
     # ==================== OTHER ====================
     title = Column(String(255), nullable=True)
     roast_level = Column(String(50), nullable=True)
@@ -120,6 +128,11 @@ class Roast(Base):
     reference_for_coffee_id = Column(UUID(as_uuid=True), ForeignKey("coffees.id", ondelete="SET NULL"), nullable=True)
     reference_for_blend_id = Column(UUID(as_uuid=True), ForeignKey("blends.id", ondelete="SET NULL"), nullable=True)
     reference_machine = Column(String(100), nullable=True)
+    reference_beans_notes = Column(Text, nullable=True)  # Notes to display in Beans field when reference is selected
+    reference_profile_id = Column(UUID(as_uuid=True), ForeignKey("roasts.id", ondelete="SET NULL"), nullable=True)  # UUID выбранного эталонного профиля для background
+    
+    # ==================== QUALITY CONTROL ====================
+    in_quality_control = Column(Boolean, nullable=False, default=False)  # Mark roasts that should appear in QC table
 
     # ==================== RELATIONSHIPS ====================
     user = relationship("User")

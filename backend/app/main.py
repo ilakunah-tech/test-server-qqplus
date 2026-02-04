@@ -1,10 +1,16 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from app.config import settings
 from app.api.v1.router import api_router
 from app.ws.notifications import websocket_endpoint
+from app.services.task_scheduler import start_scheduler, stop_scheduler
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Artisan+ Local Server",
@@ -34,6 +40,30 @@ app.include_router(api_router, prefix="/apiv1")
 
 # WebSocket
 app.websocket("/ws/notifications")(websocket_endpoint)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log validation errors for debugging."""
+    logger.error(f"Validation error on {request.method} {request.url.path}: {exc.errors()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background services on application startup"""
+    start_scheduler()
+    logger.info("Application started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background services on application shutdown"""
+    stop_scheduler()
+    logger.info("Application shutdown")
 
 
 @app.get("/")

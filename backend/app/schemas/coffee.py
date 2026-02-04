@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
@@ -12,6 +12,7 @@ class CoffeeBase(BaseModel):
     processing: Optional[str] = None
     moisture: Optional[float] = None
     density: Optional[float] = None
+    water_activity: Optional[float] = None
 
 
 class CoffeeCreate(CoffeeBase):
@@ -26,6 +27,7 @@ class CoffeeUpdate(BaseModel):
     processing: Optional[str] = None
     moisture: Optional[float] = None
     density: Optional[float] = None
+    water_activity: Optional[float] = None
 
 
 class CoffeeResponse(CoffeeBase):
@@ -42,3 +44,7 @@ class CoffeeResponse(CoffeeBase):
 class CoffeeListResponse(BaseModel):
     items: list[CoffeeResponse]
     total: int
+
+
+class AddStockRequest(BaseModel):
+    weight_kg: float = Field(..., gt=0, description="Weight to add in kg")

@@ -12,6 +12,12 @@ export const formatDate = (date: string | Date | null | undefined): string => {
   return d ? format(d, 'yyyy-MM-dd') : '—';
 };
 
+/** Короткий формат для наклеек: "дд.мм" */
+export const formatDateDDMM = (date: string | Date | null | undefined): string => {
+  const d = toDate(date);
+  return d ? format(d, 'dd.MM') : '—';
+};
+
 export const formatDateTime = (date: string | Date | null | undefined): string => {
   const d = toDate(date);
   return d ? format(d, 'yyyy-MM-dd HH:mm') : '—';
@@ -36,3 +42,13 @@ export const formatWeight = (kg: number): string => {
 export const formatPercent = (value: number): string => {
   return `${value.toFixed(1)}%`;
 };
+
+/** Roast display ID: #roast_seq (server) and optionally Rbatch_number (Artisan) */
+export function roastDisplayId(roast: { roast_seq?: number; batch_number?: number }): string {
+  const seq = roast.roast_seq;
+  const batch = roast.batch_number;
+  if (seq != null && seq > 0) {
+    return batch != null && batch > 0 ? `#${seq} • R${batch}` : `#${seq}`;
+  }
+  return batch != null && batch > 0 ? `R${batch}` : '—';
+}

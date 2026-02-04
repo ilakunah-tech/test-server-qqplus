@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { WS_URL } from '@/utils/constants';
 import { authStore } from '@/store/authStore';
+import { settingsStore } from '@/store/settingsStore';
 import { notificationStore } from '@/store/notificationStore';
 
 export const useWebSocket = () => {
@@ -8,9 +9,11 @@ export const useWebSocket = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const token = authStore((state) => state.token);
+  const wsNotifications = settingsStore((state) => state.wsNotifications);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !wsNotifications) {
+      setIsConnected(false);
       return;
     }
 
@@ -70,7 +73,7 @@ export const useWebSocket = () => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [token]);
+  }, [token, wsNotifications]);
 
   return { isConnected };
 };

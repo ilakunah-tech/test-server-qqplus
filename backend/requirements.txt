@@ -11,3 +11,4 @@ bcrypt==4.0.1
 python-multipart==0.0.6
 structlog==24.1.0
 email-validator==2.1.0
+APScheduler==3.10.4

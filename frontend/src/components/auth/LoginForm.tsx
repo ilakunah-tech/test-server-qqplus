@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FlamesDecor } from '@/components/icons/FlamesDecor';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -46,16 +47,20 @@ export const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-3xl text-center text-brand">Artisan+</CardTitle>
-          <CardDescription className="text-center">
-            Sign in to your account
-          </CardDescription>
-          <p className="mt-2 text-center text-sm text-gray-600">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-purple-200/60 dark:border-gray-600 shadow-lg">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <img src="/загруженное.png" alt="QQ Coffee" className="h-20 w-auto shrink-0" />
+            </div>
+            <CardTitle className="text-3xl text-brand">QQ Coffee · Artisan+</CardTitle>
+            <CardDescription className="text-center">
+              Sign in to your account
+            </CardDescription>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             Don't have an account?{' '}
-            <Link to="/register" className="font-medium hover:underline" style={{ color: '#844392' }}>
+            <Link to="/register" className="font-medium text-brand hover:underline hover:text-qq-purple-dark">
               Sign up
             </Link>
           </p>
@@ -108,6 +113,8 @@ export const LoginForm = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
+      <FlamesDecor className="h-24" />
     </div>
   );
 };

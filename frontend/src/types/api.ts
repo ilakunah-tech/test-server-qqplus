@@ -1,7 +1,11 @@
+export type UserRole = 'user' | 'admin';
+
 export interface User {
   id: string;
   email: string;
+  username?: string | null;
   is_active: boolean;
+  role: UserRole;
   created_at: string;
 }
 
@@ -17,6 +21,7 @@ export interface Coffee {
   processing?: string;
   moisture?: number;
   density?: number;
+  water_activity?: number;
   stock_weight_kg?: number;
   created_at: string;
   updated_at?: string;
@@ -79,6 +84,8 @@ export interface Roast {
   
   // Batch identification
   batch_number: number;
+  /** Global server sequential number (shared across all roasts) */
+  roast_seq?: number;
   label: string;
   
   // Timestamps
@@ -146,6 +153,13 @@ export interface Roast {
   title?: string;
   roast_level?: string;
   notes?: string;
+
+  // QC: cupping & espresso
+  cupping_date?: string;  // ISO date
+  cupping_verdict?: string;  // 'green' | 'yellow' | 'red'
+  espresso_date?: string;
+  espresso_verdict?: string;
+  espresso_notes?: string;
   
   /** Backend field for .alog path */
   alog_file_path?: string;
@@ -157,6 +171,13 @@ export interface Roast {
   reference_for_coffee_id?: string;
   reference_for_blend_id?: string;
   reference_machine?: string;
+  reference_beans_notes?: string;  // Notes to display in Beans field when reference is selected
+  
+  // Quality control flag
+  in_quality_control?: boolean;  // Mark roast for Quality Control table
+  
+  // Goals status (проверка соответствия целям)
+  goals_status?: 'green' | 'yellow' | 'red';  // Статус проверки целей
   
   // Stock tracking
   deducted_components?: Array<{
@@ -169,13 +190,17 @@ export interface Roast {
 
 export interface Schedule {
   id: string;
-  coffee_id: string;
+  user_id?: string;
+  title: string;
+  scheduled_date: string; // YYYY-MM-DD
+  scheduled_weight_kg?: number;
+  coffee_id?: string;
   batch_id?: string;
-  planned_date: string;
   status: 'pending' | 'completed' | 'cancelled';
-  completed_roast_id?: string;
+  completed_at?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 // ==================== API RESPONSES ====================
@@ -198,6 +223,8 @@ export interface LoginRequest {
 export interface TokenResponse {
   token: string;
   user_id: string;
+  email?: string;
+  role?: UserRole;
 }
 
 // ==================== ROAST EVENT MARKERS ====================

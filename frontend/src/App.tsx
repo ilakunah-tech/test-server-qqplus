@@ -1,6 +1,8 @@
+import { useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authStore } from '@/store/authStore';
+import { settingsStore } from '@/store/settingsStore';
 import { Layout } from '@/components/layout/Layout';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -8,9 +10,14 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { InventoryPage } from '@/pages/InventoryPage';
 import { RoastsPage } from '@/pages/RoastsPage';
 import { RoastDetailPage } from '@/pages/RoastDetailPage';
+import { CompareRoastsPage } from '@/pages/CompareRoastsPage';
 import { SchedulePage } from '@/pages/SchedulePage';
 import { BlendsPage } from '@/pages/BlendsPage';
+import { QualityControlPage } from '@/pages/QualityControlPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { UsersPage } from '@/pages/UsersPage';
+import { ProductionTasksPage } from '@/pages/ProductionTasksPage';
+import { ProductionTasksHistoryPage } from '@/pages/ProductionTasksHistoryPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,9 +33,45 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = authStore((state) => state.isAuthenticated);
+  const role = authStore((state) => state.role);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (role !== 'admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const theme = settingsStore((s) => s.theme);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    let effective: 'light' | 'dark' = 'light';
+    if (theme === 'dark') effective = 'dark';
+    else if (theme === 'system') {
+      effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    root.classList.remove('dark', 'light');
+    root.classList.add(effective);
+    root.setAttribute('data-theme', effective);
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => {
+        const isDark = mq.matches;
+        root.classList.remove('dark', 'light');
+        root.classList.add(isDark ? 'dark' : 'light');
+        root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      };
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, [theme]);
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -64,6 +107,16 @@ function App() {
             }
           />
           <Route
+            path="/roasts/compare"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <CompareRoastsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/roasts/:id"
             element={
               <ProtectedRoute>
@@ -84,11 +137,41 @@ function App() {
             }
           />
           <Route
+            path="/production-tasks"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ProductionTasksPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production-tasks/history"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ProductionTasksHistoryPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/blends"
             element={
               <ProtectedRoute>
                 <Layout>
                   <BlendsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality-control"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <QualityControlPage />
                 </Layout>
               </ProtectedRoute>
             }
@@ -103,9 +186,20 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/users"
+            element={
+              <AdminRoute>
+                <Layout>
+                  <UsersPage />
+                </Layout>
+              </AdminRoute>
+            }
+          />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

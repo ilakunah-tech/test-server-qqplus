@@ -14,4 +14,16 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
   },
+  optimizeDeps: {
+    include: ['plotly.js-dist-min'],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
+  build: {
+    commonjsOptions: {
+      include: [/plotly.js-dist-min/, /node_modules/],
+      transformMixedEsModules: true,
+    },
+  },
 })

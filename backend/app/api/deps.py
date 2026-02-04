@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, USER_ROLE_ADMIN
 from app.core.security import decode_access_token
 
 security = HTTPBearer()
@@ -41,3 +41,21 @@ async def get_current_user(
             detail="Inactive user",
         )
     return user
+
+
+def require_roles(*allowed_roles: str):
+    """Dependency that requires current user to have one of the given roles."""
+
+    async def _require_roles(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return _require_roles
+
+
+# Require admin role for protected endpoints
+require_admin = require_roles(USER_ROLE_ADMIN)

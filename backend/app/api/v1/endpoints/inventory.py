@@ -4,14 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
 from typing import Optional, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.coffee import Coffee
 from app.models.batch import Batch
 from app.models.schedule import Schedule
 from app.models.blend import Blend
-from app.schemas.coffee import CoffeeCreate, CoffeeUpdate, CoffeeResponse, CoffeeListResponse
+from app.schemas.coffee import CoffeeCreate, CoffeeUpdate, CoffeeResponse, CoffeeListResponse, AddStockRequest
 from app.schemas.batch import (
     BatchCreate,
     BatchUpdate,
@@ -53,6 +53,7 @@ async def get_stock_artisan(
             "processing": c.processing,
             "moisture": float(c.moisture) if c.moisture is not None else None,
             "density": float(c.density) if c.density is not None else None,
+            "water_activity": float(c.water_activity) if c.water_activity is not None else None,
             "stock": [
                 {
                     "location_hr_id": "default",
@@ -63,22 +64,33 @@ async def get_stock_artisan(
         })
 
     # Schedule: user's schedule in Artisan ScheduledItem format
+    # Artisan requires: _id, date, title, amount, location, count, coffee (or blend)
+    # Artisan rejects items with date in the past
+    today_local = date.today()
     schedule_result = await db.execute(
         select(Schedule, Coffee.hr_id)
         .outerjoin(Coffee, Schedule.coffee_id == Coffee.id)
-        .where(Schedule.user_id == current_user.id)
-        .order_by(Schedule.scheduled_date.desc())
+        .where(
+            Schedule.user_id == current_user.id,
+            Schedule.scheduled_date >= today_local,  # Artisan rejects past dates
+            Schedule.coffee_id.isnot(None),  # Artisan requires coffee or blend
+        )
+        .order_by(Schedule.scheduled_date.asc())
     )
     schedule_rows = schedule_result.all()
     schedule: list[dict[str, Any]] = []
     for row in schedule_rows:
         s, coffee_hr_id = row[0], row[1]
+        if not coffee_hr_id:
+            continue
         schedule.append({
             "_id": str(s.id),
             "date": s.scheduled_date.isoformat() if s.scheduled_date else "",
             "title": s.title or "",
             "amount": float(s.scheduled_weight_kg) if s.scheduled_weight_kg is not None else 0.0,
             "coffee": coffee_hr_id,
+            "location": "default",  # Required by Artisan; matches stock location_hr_id
+            "count": 1,  # Required by Artisan; number of roasts planned
             "status": s.status,
         })
 
@@ -190,6 +202,7 @@ async def create_coffee(
         processing=coffee_data.processing,
         moisture=coffee_data.moisture,
         density=coffee_data.density,
+        water_activity=coffee_data.water_activity,
     )
     db.add(coffee)
     await db.commit()
@@ -232,6 +245,25 @@ async def update_coffee(
     for key, value in update_data.items():
         setattr(coffee, key, value)
     
+    await db.commit()
+    await db.refresh(coffee)
+    return {"data": CoffeeResponse.model_validate(coffee)}
+
+
+@router.post("/coffees/{coffee_id}/add-stock", response_model=dict)
+async def add_coffee_stock(
+    coffee_id: UUID,
+    body: AddStockRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add green bean stock (приход) when coffee arrives at warehouse."""
+    result = await db.execute(select(Coffee).where(Coffee.id == coffee_id).with_for_update())
+    coffee = result.scalar_one_or_none()
+    if not coffee:
+        raise HTTPException(status_code=404, detail="Coffee not found")
+    current = float(coffee.stock_weight_kg or 0)
+    coffee.stock_weight_kg = Decimal(str(current + body.weight_kg))
     await db.commit()
     await db.refresh(coffee)
     return {"data": CoffeeResponse.model_validate(coffee)}

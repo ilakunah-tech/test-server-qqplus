@@ -2,12 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <script>
+      (function() {
+        try {
+          var theme = 'system';
+          var stored = localStorage.getItem('settings-storage');
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            theme = (parsed.state && parsed.state.theme) || parsed.theme || 'system';
+          }
+          var dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.classList.remove('dark', 'light');
+          root.classList.add(dark ? 'dark' : 'light');
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <title>Artisan+ Local Server</title>
+    <title>QQ Coffee · Artisan+</title>
   </head>
   <body>
     <div id="root"></div>

@@ -9,7 +9,7 @@ export const inventoryApi = {
     return response.data;
   },
   
-  createCoffee: async (data: Omit<Coffee, 'id' | 'hr_id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<Coffee>> => {
+  createCoffee: async (data: { label: string; origin?: string; region?: string; variety?: string; processing?: string; moisture?: number; density?: number; water_activity?: number }): Promise<ApiResponse<Coffee>> => {
     const response = await apiClient.post<ApiResponse<Coffee>>('/inventory/coffees', data);
     return response.data;
   },
@@ -18,7 +18,23 @@ export const inventoryApi = {
     const response = await apiClient.get<ApiResponse<Coffee>>(`/inventory/coffees/${id}`);
     return response.data;
   },
-  
+
+  updateCoffee: async (id: string, data: Partial<Coffee>): Promise<ApiResponse<Coffee>> => {
+    const response = await apiClient.put<ApiResponse<Coffee>>(`/inventory/coffees/${id}`, data);
+    return response.data;
+  },
+
+  deleteCoffee: async (id: string): Promise<void> => {
+    await apiClient.delete(`/inventory/coffees/${id}`);
+  },
+
+  addCoffeeStock: async (id: string, weightKg: number): Promise<ApiResponse<Coffee>> => {
+    const response = await apiClient.post<ApiResponse<Coffee>>(`/inventory/coffees/${id}/add-stock`, {
+      weight_kg: weightKg,
+    });
+    return response.data;
+  },
+
   getBatches: async (coffeeId?: string, limit = 100, offset = 0): Promise<ApiResponse<ListResponse<Batch>>> => {
     const response = await apiClient.get<ApiResponse<ListResponse<Batch>>>('/inventory/batches', {
       params: { coffee_id: coffeeId, limit, offset },

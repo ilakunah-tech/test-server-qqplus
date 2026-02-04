@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Any
 
 
@@ -157,6 +157,20 @@ class RoastUpdate(BaseModel):
     ground_color: Optional[int] = None
     cupping_score: Optional[int] = None
 
+    # QC: cupping & espresso
+    cupping_date: Optional[date] = None
+    cupping_verdict: Optional[str] = None  # green / yellow / red
+    espresso_date: Optional[date] = None
+    espresso_verdict: Optional[str] = None
+    espresso_notes: Optional[str] = None
+    
+    # Reference profile notes
+    reference_beans_notes: Optional[str] = None  # Notes to display in Beans field when reference is selected
+    reference_profile_id: Optional[UUID] = None  # UUID выбранного эталонного профиля для background
+    
+    # Quality control flag
+    in_quality_control: Optional[bool] = None  # Mark roast for Quality Control table
+
 
 class RoastResponse(BaseModel):
     """Full roast response for API."""
@@ -170,7 +184,8 @@ class RoastResponse(BaseModel):
     schedule_id: Optional[UUID] = None
     
     # Batch identification
-    batch_number: Optional[int] = 0
+    batch_number: Optional[int] = 0  # From Artisan (roastbatchnr)
+    roast_seq: Optional[int] = None  # Global server sequential number
     label: Optional[str] = ""
     
     # Timestamps
@@ -239,12 +254,24 @@ class RoastResponse(BaseModel):
     alog_file_path: Optional[str] = None
     deducted_components: Optional[list[dict]] = None
 
+    # QC: cupping & espresso
+    cupping_date: Optional[date] = None
+    cupping_verdict: Optional[str] = None
+    espresso_date: Optional[date] = None
+    espresso_verdict: Optional[str] = None
+    espresso_notes: Optional[str] = None
+
     # Reference profile (эталонный профиль)
     is_reference: bool = False
     reference_name: Optional[str] = None
     reference_for_coffee_id: Optional[UUID] = None
     reference_for_blend_id: Optional[UUID] = None
     reference_machine: Optional[str] = None
+    reference_beans_notes: Optional[str] = None  # Notes to display in Beans field when reference is selected
+    reference_profile_id: Optional[UUID] = None  # UUID выбранного эталонного профиля для background
+    
+    # Quality control flag
+    in_quality_control: bool = False  # Mark roast for Quality Control table
 
     class Config:
         from_attributes = True

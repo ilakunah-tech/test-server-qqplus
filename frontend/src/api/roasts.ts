@@ -6,10 +6,12 @@ export const roastsApi = {
     limit = 100,
     offset = 0,
     dateFrom?: string,
-    dateTo?: string
+    dateTo?: string,
+    coffeeId?: string,
+    inQualityControl?: boolean
   ): Promise<ApiResponse<ListResponse<Roast>>> => {
     const response = await apiClient.get<ApiResponse<ListResponse<Roast>>>('/roasts', {
-      params: { limit, offset, date_from: dateFrom, date_to: dateTo },
+      params: { limit, offset, date_from: dateFrom, date_to: dateTo, coffee_id: coffeeId || undefined, in_quality_control: inQualityControl },
     });
     return response.data;
   },
@@ -21,6 +23,14 @@ export const roastsApi = {
   
   getRoast: async (id: string): Promise<ApiResponse<Roast>> => {
     const response = await apiClient.get<ApiResponse<Roast>>(`/roasts/${id}`);
+    return response.data;
+  },
+
+  updateRoast: async (
+    id: string,
+    data: Partial<Pick<Roast, 'notes' | 'cupping_score' | 'label' | 'title' | 'green_weight_kg' | 'roasted_weight_kg' | 'operator' | 'machine' | 'email' | 'cupping_date' | 'cupping_verdict' | 'espresso_date' | 'espresso_verdict' | 'espresso_notes' | 'reference_beans_notes' | 'in_quality_control'>>
+  ): Promise<ApiResponse<Roast>> => {
+    const response = await apiClient.patch<ApiResponse<Roast>>(`/roasts/${id}`, data);
     return response.data;
   },
   

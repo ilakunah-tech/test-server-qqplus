@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getBlends, deleteBlend, Blend, RecipeComponent } from '@/api/blends';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BlendForm } from './BlendForm';
 import { Pencil, Trash2, Plus } from 'lucide-react';
 import { formatWeight } from '@/utils/formatters';
@@ -13,11 +12,24 @@ function formatRecipe(recipe: RecipeComponent[]) {
     .join(' + ');
 }
 
+const isBlendDialogOpen = (show: boolean, editing: Blend | null) => show || editing != null;
+
 export function BlendsList() {
   const [blends, setBlends] = useState<Blend[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBlend, setEditingBlend] = useState<Blend | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isBlendDialogOpen(showCreateModal, editingBlend)) {
+        setShowCreateModal(false);
+        setEditingBlend(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showCreateModal, editingBlend]);
 
   const loadBlends = async () => {
     try {
@@ -46,6 +58,7 @@ export function BlendsList() {
   };
 
   const handleEdit = (blend: Blend) => {
+    setShowCreateModal(false);
     setEditingBlend(blend);
   };
 
@@ -60,60 +73,62 @@ export function BlendsList() {
     setEditingBlend(null);
   };
 
+  const openCreateDialog = () => {
+    setEditingBlend(null);
+    setShowCreateModal(true);
+  };
+
+  const blendDialogOpen = isBlendDialogOpen(showCreateModal, editingBlend);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end items-center">
-        <Button onClick={() => setShowCreateModal(true)}>
+        <Button onClick={openCreateDialog}>
           <Plus className="w-4 h-4 mr-2" />
           Create Blend
         </Button>
       </div>
 
-      {showCreateModal && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Blend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BlendForm onSuccess={handleFormSuccess} onCancel={handleFormCancel} />
-          </CardContent>
-        </Card>
-      )}
-
-      {editingBlend && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit Blend</CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Диалог создания/редактирования бленда */}
+      {blendDialogOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/30"
+            aria-hidden
+            onClick={handleFormCancel}
+          />
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-card border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {editingBlend ? 'Edit Blend' : 'Create Blend'}
+            </h3>
             <BlendForm
-              blend={editingBlend}
+              blend={editingBlend ?? undefined}
               onSuccess={handleFormSuccess}
               onCancel={handleFormCancel}
             />
-          </CardContent>
-        </Card>
+          </div>
+        </>
       )}
 
       {loading ? (
-        <p className="text-gray-500">Loading blends...</p>
+        <p className="text-gray-500 dark:text-gray-400">Loading blends...</p>
       ) : (
-        <div className="rounded-card border border-gray-200 overflow-hidden">
+        <div className="rounded-card border border-gray-200 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-800">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
-                <th className="px-4 py-3 font-semibold text-gray-900">Name</th>
-                <th className="px-4 py-3 font-semibold text-gray-900">Recipe</th>
-                <th className="px-4 py-3 font-semibold text-gray-900">Available Stock</th>
-                <th className="px-4 py-3 font-semibold text-gray-900">Actions</th>
+                <th className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">Name</th>
+                <th className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">Recipe</th>
+                <th className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">Available Stock</th>
+                <th className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
               {blends.map((blend) => (
-                <tr key={blend.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{blend.name}</td>
-                  <td className="px-4 py-3 text-gray-700">{formatRecipe(blend.recipe)}</td>
-                  <td className="px-4 py-3 text-gray-700">
+                <tr key={blend.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{blend.name}</td>
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{formatRecipe(blend.recipe)}</td>
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {blend.available_weight_kg != null
                       ? formatWeight(blend.available_weight_kg)
                       : '—'}
@@ -145,7 +160,7 @@ export function BlendsList() {
             </tbody>
           </table>
           {blends.length === 0 && (
-            <p className="px-4 py-8 text-center text-gray-500">No blends yet. Create one to get started.</p>
+            <p className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No blends yet. Create one to get started.</p>
           )}
         </div>
       )}

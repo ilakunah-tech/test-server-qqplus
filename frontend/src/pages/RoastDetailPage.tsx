@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatDateTime } from '@/utils/formatters';
+import { formatDateTime, roastDisplayId } from '@/utils/formatters';
 import {
   formatTimeMMSS,
   calculateRoRWithPeriod,
@@ -19,7 +19,7 @@ import {
   downsample,
 } from '@/utils/roastCalculations';
 import { getRoastEvents } from '@/types/api';
-import { ArrowLeft, Upload, Download, Trash2, Star, Replace, StarOff } from 'lucide-react';
+import { ArrowLeft, Upload, Download, Trash2, Star, Replace, StarOff, FileText, Calendar, Pencil } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -32,16 +32,34 @@ import {
   ReferenceDot,
   ReferenceArea,
 } from 'recharts';
+import { EditRoastInfoDialog } from '@/components/Roasts/EditRoastInfoDialog';
 import type { Roast, Coffee } from '@/types/api';
 import type { Blend } from '@/api/blends';
 
 // ==================== HELPER COMPONENTS ====================
 
-function SummaryRow({ label, value, className = '' }: { label: string; value: React.ReactNode; className?: string }) {
+function SummaryRow({
+  label,
+  value,
+  className = '',
+  onClick,
+}: { label: string; value: React.ReactNode; className?: string; onClick?: () => void }) {
+  const content = <span className="text-gray-900 dark:text-gray-100 text-sm text-right font-medium">{value ?? '—'}</span>;
   return (
-    <div className={`flex justify-between items-start py-2 border-b border-gray-100 last:border-0 gap-4 ${className}`}>
-      <span className="text-gray-500 text-sm shrink-0">{label}</span>
-      <span className="text-gray-900 text-sm text-right font-medium">{value ?? '—'}</span>
+    <div className={`flex justify-between items-start py-2 border-b border-gray-100 dark:border-gray-600 last:border-0 gap-4 ${className}`}>
+      <span className="text-gray-500 dark:text-gray-400 text-sm shrink-0">{label}</span>
+      {onClick ? (
+        <button
+          type="button"
+          onClick={onClick}
+          className="text-right font-medium text-sm text-gray-900 dark:text-gray-100 hover:text-brand dark:hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1"
+          title="Нажмите для редактирования"
+        >
+          {value ?? '—'}
+        </button>
+      ) : (
+        content
+      )}
     </div>
   );
 }
@@ -49,8 +67,8 @@ function SummaryRow({ label, value, className = '' }: { label: string; value: Re
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1.5">
-      <span className="text-gray-600 text-sm">{label}</span>
-      <span className="text-gray-900 text-sm font-medium">{value ?? '—'}</span>
+      <span className="text-gray-600 dark:text-gray-400 text-sm">{label}</span>
+      <span className="text-gray-900 dark:text-gray-100 text-sm font-medium">{value ?? '—'}</span>
     </div>
   );
 }
@@ -76,7 +94,7 @@ function LegendCheckbox({
       />
       <span className="flex items-center gap-1">
         <span className="w-3 h-0.5 rounded" style={{ backgroundColor: color }} />
-        <span className="text-sm text-gray-700">{label}</span>
+        <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
       </span>
     </label>
   );
@@ -85,12 +103,10 @@ function LegendCheckbox({
 // ==================== REFERENCE DIALOGS ====================
 
 function CreateReferenceDialog({
-  roastId,
   onClose,
   onSubmit,
   isSubmitting,
 }: {
-  roastId: string;
   onClose: () => void;
   onSubmit: (body: { reference_name: string; reference_for_coffee_id?: string; reference_for_blend_id?: string; reference_machine: string }) => void;
   isSubmitting: boolean;
@@ -139,8 +155,8 @@ function CreateReferenceDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-4">Создать новый эталон</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Создать новый эталон</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label>Тип</Label>
@@ -189,7 +205,7 @@ function CreateReferenceDialog({
             <Label>Машина</Label>
             {myMachines.length === 0 ? (
               <p className="text-sm text-amber-600 mt-1">
-                Добавьте машины в <Link to="/settings" className="underline">Настройках</Link>, затем создайте эталон.
+                Добавьте машины в <Link to="/settings" className="underline">Setting</Link>, затем создайте эталон.
               </p>
             ) : (
               <select
@@ -219,13 +235,11 @@ function CreateReferenceDialog({
 }
 
 function ReplaceReferenceDialog({
-  roastId,
   currentRoast,
   onClose,
   onSubmit,
   isSubmitting,
 }: {
-  roastId: string;
   currentRoast: Roast;
   onClose: () => void;
   onSubmit: (body: { replace_reference_roast_id: string; reference_name?: string }) => void;
@@ -257,8 +271,8 @@ function ReplaceReferenceDialog({
   if (!canFetch) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-          <p className="text-gray-600 mb-4">У этой обжарки не указаны кофе/бленд или машина. Укажите их в данных обжарки или создайте эталон через «Создать эталон» с выбором кофе и машины.</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">У этой обжарки не указаны кофе/бленд или машина. Укажите их в данных обжарки или создайте эталон через «Создать эталон» с выбором кофе и машины.</p>
           <Button onClick={onClose}>Закрыть</Button>
         </div>
       </div>
@@ -267,8 +281,8 @@ function ReplaceReferenceDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-4">Заменить эталон</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Заменить эталон</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label>Заменить эталон</Label>
@@ -290,6 +304,52 @@ function ReplaceReferenceDialog({
           <div className="flex gap-2 justify-end pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Сохранение…' : 'Заменить'}</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditReferenceBeansNotesDialog({
+  currentNotes,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  currentNotes?: string;
+  onClose: () => void;
+  onSubmit: (notes: string) => void;
+  isSubmitting: boolean;
+}) {
+  const [notes, setNotes] = useState(currentNotes || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(notes.trim());
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Заметки для Beans (эталонный профиль)</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          Эти заметки будут отображаться в поле Beans в диалоговом окне Roast Properties в Artisan, когда этот эталонный профиль выбран.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="beans-notes">Заметки</Label>
+            <textarea
+              id="beans-notes"
+              className="w-full mt-1 border rounded px-3 py-2 min-h-[200px] font-mono text-sm"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Введите заметки, которые будут отображаться в поле Beans..."
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
+            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Сохранение…' : 'Сохранить'}</Button>
           </div>
         </form>
       </div>
@@ -362,6 +422,7 @@ export const RoastDetailPage = () => {
   // Reference profile dialogs
   const [showCreateRefDialog, setShowCreateRefDialog] = useState(false);
   const [showReplaceRefDialog, setShowReplaceRefDialog] = useState(false);
+  const [showEditBeansNotesDialog, setShowEditBeansNotesDialog] = useState(false);
 
   const createRefMutation = useMutation({
     mutationFn: ({ roastId, body }: { roastId: string; body: { reference_name: string; reference_for_coffee_id?: string; reference_for_blend_id?: string; reference_machine: string } }) =>
@@ -397,6 +458,33 @@ export const RoastDetailPage = () => {
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
       alert(err.response?.data?.detail || 'Ошибка снятия эталона');
+    },
+  });
+
+  const updateBeansNotesMutation = useMutation({
+    mutationFn: ({ roastId, notes }: { roastId: string; notes: string }) =>
+      roastsApi.updateRoast(roastId, { reference_beans_notes: notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roast', id] });
+      queryClient.invalidateQueries({ queryKey: ['roasts', 'references'] });
+      setShowEditBeansNotesDialog(false);
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      alert(err.response?.data?.detail || 'Ошибка сохранения заметок');
+    },
+  });
+
+  const [showEditRoastInfoDialog, setShowEditRoastInfoDialog] = useState(false);
+  const updateRoastInfoMutation = useMutation({
+    mutationFn: ({ roastId, data }: { roastId: string; data: Parameters<typeof roastsApi.updateRoast>[1] }) =>
+      roastsApi.updateRoast(roastId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roast', id] });
+      queryClient.invalidateQueries({ queryKey: ['roasts'] });
+      setShowEditRoastInfoDialog(false);
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      alert(err.response?.data?.detail || 'Ошибка сохранения');
     },
   });
 
@@ -691,7 +779,7 @@ export const RoastDetailPage = () => {
   if (!id) {
     return (
       <div className="space-y-6">
-        <p className="text-gray-600">ID обжарки отсутствует.</p>
+        <p className="text-gray-600 dark:text-gray-400">ID обжарки отсутствует.</p>
         <Button variant="outline" onClick={() => navigate('/roasts')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Назад к обжаркам
@@ -701,7 +789,7 @@ export const RoastDetailPage = () => {
   }
 
   if (isLoading) {
-    return <div className="space-y-6"><p className="text-gray-600">Загрузка обжарки…</p></div>;
+    return <div className="space-y-6"><p className="text-gray-600 dark:text-gray-400">Загрузка обжарки…</p></div>;
   }
 
   if (error || !roast) {
@@ -716,15 +804,18 @@ export const RoastDetailPage = () => {
     );
   }
 
-  const displayTitle = roast.label || roast.title || profile?.title || `Batch ${roast.batch_number || profile?.roastbatchnr || ''}` || 'Обжарка';
-  
+  const batchNumberDisplay = roastDisplayId({
+    roast_seq: roast.roast_seq,
+    batch_number: roast.batch_number || profile?.roastbatchnr,
+  });
+  const displayTitle = roast.label || roast.title || profile?.title || batchNumberDisplay || 'Обжарка';
+
   // Get additional info from profile
   const beans = profile?.beans || profile?.plus_coffee_label || roast.coffee_hr_id;
   const storeName = profile?.plus_store_label || roast.location_hr_id;
   const storeId = profile?.plus_store || roast.location_hr_id;
   const machineName = profile?.roastertype || roast.machine;
   const operatorName = profile?.operator || roast.operator;
-  const batchNumber = roast.batch_number || profile?.roastbatchnr;
   // .alog weight is often [green_g, roasted_g, 'g'] — convert to kg when from profile
   const profileWeightKg =
     profile?.weight && Array.isArray(profile.weight) && profile.weight.length >= 2
@@ -742,10 +833,38 @@ export const RoastDetailPage = () => {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{displayTitle}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditRoastInfoDialog(true)}
+                className="hover:text-brand dark:hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 inline-flex items-center gap-1"
+                title="Нажмите для редактирования названия, веса, машины, оператора"
+              >
+                {displayTitle}
+                <Pencil className="w-4 h-4 opacity-60" />
+              </button>
+            </h1>
             {roastDate && (
-              <p className="text-gray-500 text-sm mt-0.5">{formatDateTime(roastDate)}</p>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{formatDateTime(roastDate)}</p>
             )}
+            {/* .alog file status indicator */}
+            <div className="mt-2 flex items-center gap-2">
+              {hasAlogFile ? (
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Профиль .alog загружен
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Профиль .alog не загружен
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -780,19 +899,30 @@ export const RoastDetailPage = () => {
               </div>
             )}
             {roast?.is_reference ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!window.confirm('Убрать этот профиль из эталонов?')) return;
-                  if (id) removeRefMutation.mutate(id);
-                }}
-                disabled={removeRefMutation.isPending}
-                title="Убрать из эталонов"
-              >
-                <StarOff className="w-4 h-4 mr-2" />
-                Убрать из эталонов
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowEditBeansNotesDialog(true)}
+                  title="Редактировать заметки для Beans"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Заметки Beans
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!window.confirm('Убрать этот профиль из эталонов?')) return;
+                    if (id) removeRefMutation.mutate(id);
+                  }}
+                  disabled={removeRefMutation.isPending}
+                  title="Убрать из эталонов"
+                >
+                  <StarOff className="w-4 h-4 mr-2" />
+                  Убрать из эталонов
+                </Button>
+              </>
             ) : (
               <>
                 <Button variant="outline" size="sm" onClick={() => setShowCreateRefDialog(true)} title="Создать новый эталон">
@@ -813,7 +943,7 @@ export const RoastDetailPage = () => {
                 if (id) deleteRoastMutation.mutate(id);
               }}
               disabled={deleteRoastMutation.isPending}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/50"
               title="Удалить обжарку"
             >
               <Trash2 className="w-4 h-4 mr-2" />
@@ -826,19 +956,35 @@ export const RoastDetailPage = () => {
       {/* Диалоги эталонов */}
       {showCreateRefDialog && roast && id && (
         <CreateReferenceDialog
-          roastId={id}
           onClose={() => setShowCreateRefDialog(false)}
-          onSubmit={(body) => createRefMutation.mutate({ roastId: id, body })}
+          onSubmit={(body) => createRefMutation.mutate({ roastId: id!, body })}
           isSubmitting={createRefMutation.isPending}
         />
       )}
       {showReplaceRefDialog && roast && id && (
         <ReplaceReferenceDialog
-          roastId={id}
           currentRoast={roast}
           onClose={() => setShowReplaceRefDialog(false)}
-          onSubmit={(body) => replaceRefMutation.mutate({ roastId: id, body })}
+          onSubmit={(body) => replaceRefMutation.mutate({ roastId: id!, body })}
           isSubmitting={replaceRefMutation.isPending}
+        />
+      )}
+      {showEditBeansNotesDialog && roast && id && (
+        <EditReferenceBeansNotesDialog
+          currentNotes={roast.reference_beans_notes}
+          onClose={() => setShowEditBeansNotesDialog(false)}
+          onSubmit={(notes) => updateBeansNotesMutation.mutate({ roastId: id!, notes })}
+          isSubmitting={updateBeansNotesMutation.isPending}
+        />
+      )}
+      {showEditRoastInfoDialog && roast && id && (
+        <EditRoastInfoDialog
+          roast={roast}
+          onClose={() => setShowEditRoastInfoDialog(false)}
+          onSubmit={async (data) => {
+            await updateRoastInfoMutation.mutateAsync({ roastId: id!, data });
+          }}
+          isSubmitting={updateRoastInfoMutation.isPending}
         />
       )}
 
@@ -847,11 +993,11 @@ export const RoastDetailPage = () => {
         {/* Summary Block (Сводка) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Сводка</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Сводка</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-0">
-            <SummaryRow label="Батч:" value={batchNumber || '—'} />
+            <SummaryRow label="Батч:" value={batchNumberDisplay || '—'} />
             
             {roast.blend_spec ? (
               <>
@@ -859,15 +1005,15 @@ export const RoastDetailPage = () => {
                   label="Бленд:"
                   value={`${roast.blend_hr_id || ''} ${roast.blend_spec.label || ''}`}
                 />
-                <div className="py-2 border-b border-gray-100">
-                  <span className="text-gray-500 text-sm">Кофе:</span>
+                <div className="py-2 border-b border-gray-100 dark:border-gray-600">
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">Кофе:</span>
                   <div className="mt-1 space-y-1">
                     {roast.blend_spec.ingredients.map((ing, idx) => {
                       const weight = (ing.ratio * (greenWeight || 0)).toFixed(2);
                       const percent = (ing.ratio * 100).toFixed(0);
                       return (
-                        <div key={idx} className="text-sm text-gray-900 pl-4">
-                          <span className="text-violet-600 font-medium">{ing.coffee}</span>
+                        <div key={idx} className="text-sm text-gray-900 dark:text-gray-100 pl-4">
+                          <span className="text-violet-600 dark:text-violet-400 font-medium">{ing.coffee}</span>
                           {ing.label ? ` ${ing.label}` : ''} — {weight} кг ({percent}%)
                         </div>
                       );
@@ -881,7 +1027,7 @@ export const RoastDetailPage = () => {
                 value={
                   <span>
                     {profile?.plus_coffee && (
-                      <span className="text-violet-600 font-medium">{profile.plus_coffee} </span>
+                      <span className="text-violet-600 dark:text-violet-400 font-medium">{profile.plus_coffee} </span>
                     )}
                     {beans || roast.coffee_id || '—'}
                   </span>
@@ -902,13 +1048,14 @@ export const RoastDetailPage = () => {
                     }`
                   : null
               }
+              onClick={() => setShowEditRoastInfoDialog(true)}
             />
             
             {(storeName || storeId) && (
               <SummaryRow label="Склад:" value={`${storeId || ''} ${storeName || ''}`} />
             )}
             
-            <SummaryRow label="Машина:" value={machineName} />
+            <SummaryRow label="Машина:" value={machineName} onClick={() => setShowEditRoastInfoDialog(true)} />
             
             <SummaryRow
               label="Оператор:"
@@ -917,6 +1064,7 @@ export const RoastDetailPage = () => {
                   ? `${operatorName}${roast.email ? ` (${roast.email})` : ''}`
                   : null
               }
+              onClick={() => setShowEditRoastInfoDialog(true)}
             />
             
             <SummaryRow label="Дата:" value={roastDate ? formatDateTime(roastDate) : null} />
@@ -942,13 +1090,27 @@ export const RoastDetailPage = () => {
       {/* Information Block */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Информация</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Информация</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             <div className="space-y-0">
-              <InfoRow label="Батч" value={batchNumber || '—'} />
+              <InfoRow label="Батч" value={batchNumberDisplay || '—'} />
               <InfoRow label="Дата" value={roastDate ? formatDateTime(roastDate) : '—'} />
+              {roast.schedule_id && (
+                <InfoRow
+                  label="Schedule"
+                  value={
+                    <Link
+                      to="/schedule"
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      View schedule
+                    </Link>
+                  }
+                />
+              )}
               {roast.cupping_score > 0 && <InfoRow label="Оценка" value={roast.cupping_score} />}
               {(roast.notes || profile?.roastingnotes) && (
                 <InfoRow label="Заметки" value={roast.notes || profile?.roastingnotes || '—'} />
@@ -1009,39 +1171,39 @@ export const RoastDetailPage = () => {
               />
             </div>
           </div>
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Фазы обжарки</h4>
+          <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Фазы обжарки</h4>
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-amber-50 rounded-lg p-3 text-center">
-                <div className="text-xs text-amber-600 mb-1">Сушка</div>
-                <div className="text-lg font-semibold text-amber-700">
+              <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-center">
+                <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">Сушка</div>
+                <div className="text-lg font-semibold text-amber-700 dark:text-amber-300">
                   {(computed?.dryphasetime ?? computed?.DRY_time ?? roast.DRY_time)
                     ? formatTimeMMSS(computed?.dryphasetime ?? computed?.DRY_time ?? roast.DRY_time!)
                     : '—'}
                 </div>
-                <div className="text-xs text-amber-600">
+                <div className="text-xs text-amber-600 dark:text-amber-400">
                   {phases.dryPercent != null ? `${phases.dryPercent.toFixed(1)}%` : '—'}
                 </div>
               </div>
-              <div className="bg-orange-50 rounded-lg p-3 text-center">
-                <div className="text-xs text-orange-600 mb-1">Маяр</div>
-                <div className="text-lg font-semibold text-orange-700">
+              <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg p-3 text-center">
+                <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">Маяр</div>
+                <div className="text-lg font-semibold text-orange-700 dark:text-orange-300">
                   {(computed?.midphasetime ?? phases.mailardTime)
                     ? formatTimeMMSS(computed?.midphasetime ?? phases.mailardTime!)
                     : '—'}
                 </div>
-                <div className="text-xs text-orange-600">
+                <div className="text-xs text-orange-600 dark:text-orange-400">
                   {phases.mailardPercent != null ? `${phases.mailardPercent.toFixed(1)}%` : '—'}
                 </div>
               </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                <div className="text-xs text-red-600 mb-1">Развитие</div>
-                <div className="text-lg font-semibold text-red-700">
+                <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 text-center">
+                <div className="text-xs text-red-600 dark:text-red-400 mb-1">Развитие</div>
+                <div className="text-lg font-semibold text-red-700 dark:text-red-300">
                   {(computed?.finishphasetime ?? roast.DEV_time)
                     ? formatTimeMMSS(computed?.finishphasetime ?? roast.DEV_time!)
                     : '—'}
                 </div>
-                <div className="text-xs text-red-600">
+                <div className="text-xs text-red-600 dark:text-red-400">
                   {roast.DEV_ratio != null
                     ? `${roast.DEV_ratio.toFixed(1)}%`
                     : phases.devPercent != null
@@ -1054,35 +1216,35 @@ export const RoastDetailPage = () => {
 
           {/* Расширенная статистика (AUC, MET, RoR) */}
           {computed && (computed.AUC != null || computed.MET != null || computed.fcs_ror != null || computed.total_ror != null) && (
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Расширенная статистика</h4>
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Расширенная статистика</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {computed.AUC != null && (
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <div className="text-xs text-blue-600 mb-1">AUC</div>
-                    <div className="text-lg font-semibold text-blue-700">{computed.AUC}</div>
+                  <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">AUC</div>
+                    <div className="text-lg font-semibold text-blue-700 dark:text-blue-300">{computed.AUC}</div>
                     {computed.AUCbase != null && (
-                      <div className="text-xs text-blue-500">база: {computed.AUCbase}°</div>
+                      <div className="text-xs text-blue-500 dark:text-blue-400">база: {computed.AUCbase}°</div>
                     )}
                   </div>
                 )}
                 {computed.MET != null && (
-                  <div className="bg-red-50 rounded-lg p-3 text-center">
-                    <div className="text-xs text-red-600 mb-1">MET</div>
-                    <div className="text-lg font-semibold text-red-700">{computed.MET.toFixed(1)}°{tempUnit}</div>
-                    <div className="text-xs text-red-500">макс. ET</div>
+                  <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-red-600 dark:text-red-400 mb-1">MET</div>
+                    <div className="text-lg font-semibold text-red-700 dark:text-red-300">{computed.MET.toFixed(1)}°{tempUnit}</div>
+                    <div className="text-xs text-red-500 dark:text-red-400">макс. ET</div>
                   </div>
                 )}
                 {computed.fcs_ror != null && (
-                  <div className="bg-orange-50 rounded-lg p-3 text-center">
-                    <div className="text-xs text-orange-600 mb-1">RoR @ FC</div>
-                    <div className="text-lg font-semibold text-orange-700">{computed.fcs_ror.toFixed(1)}°/мин</div>
+                  <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">RoR @ FC</div>
+                    <div className="text-lg font-semibold text-orange-700 dark:text-orange-300">{computed.fcs_ror.toFixed(1)}°/мин</div>
                   </div>
                 )}
                 {computed.total_ror != null && (
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <div className="text-xs text-green-600 mb-1">Общий RoR</div>
-                    <div className="text-lg font-semibold text-green-700">{computed.total_ror.toFixed(1)}°/мин</div>
+                  <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-green-600 dark:text-green-400 mb-1">Общий RoR</div>
+                    <div className="text-lg font-semibold text-green-700 dark:text-green-300">{computed.total_ror.toFixed(1)}°/мин</div>
                   </div>
                 )}
               </div>
@@ -1091,34 +1253,34 @@ export const RoastDetailPage = () => {
 
           {/* RoR по фазам */}
           {computed && (computed.dry_phase_ror != null || computed.mid_phase_ror != null || computed.finish_phase_ror != null) && (
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">RoR по фазам</h4>
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">RoR по фазам</h4>
               <div className="grid grid-cols-3 gap-4">
-                <div className="bg-amber-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-amber-600 mb-1">Сушка</div>
-                  <div className="text-lg font-semibold text-amber-700">
+                <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">Сушка</div>
+                  <div className="text-lg font-semibold text-amber-700 dark:text-amber-300">
                     {computed.dry_phase_ror != null ? `${computed.dry_phase_ror.toFixed(1)}°/мин` : '—'}
                   </div>
                   {computed.dry_phase_delta_temp != null && (
-                    <div className="text-xs text-amber-500">Δ{computed.dry_phase_delta_temp.toFixed(1)}°</div>
+                    <div className="text-xs text-amber-500 dark:text-amber-400">Δ{computed.dry_phase_delta_temp.toFixed(1)}°</div>
                   )}
                 </div>
-                <div className="bg-orange-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-orange-600 mb-1">Майяр</div>
-                  <div className="text-lg font-semibold text-orange-700">
+                <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">Майяр</div>
+                  <div className="text-lg font-semibold text-orange-700 dark:text-orange-300">
                     {computed.mid_phase_ror != null ? `${computed.mid_phase_ror.toFixed(1)}°/мин` : '—'}
                   </div>
                   {computed.mid_phase_delta_temp != null && (
-                    <div className="text-xs text-orange-500">Δ{computed.mid_phase_delta_temp.toFixed(1)}°</div>
+                    <div className="text-xs text-orange-500 dark:text-orange-400">Δ{computed.mid_phase_delta_temp.toFixed(1)}°</div>
                   )}
                 </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-red-600 mb-1">Развитие</div>
-                  <div className="text-lg font-semibold text-red-700">
+                <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-red-600 dark:text-red-400 mb-1">Развитие</div>
+                  <div className="text-lg font-semibold text-red-700 dark:text-red-300">
                     {computed.finish_phase_ror != null ? `${computed.finish_phase_ror.toFixed(1)}°/мин` : '—'}
                   </div>
                   {computed.finish_phase_delta_temp != null && (
-                    <div className="text-xs text-red-500">Δ{computed.finish_phase_delta_temp.toFixed(1)}°</div>
+                    <div className="text-xs text-red-500 dark:text-red-400">Δ{computed.finish_phase_delta_temp.toFixed(1)}°</div>
                   )}
                 </div>
               </div>
@@ -1127,20 +1289,20 @@ export const RoastDetailPage = () => {
 
           {/* AUC по фазам */}
           {computed && (computed.dry_phase_AUC != null || computed.mid_phase_AUC != null || computed.finish_phase_AUC != null) && (
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">AUC по фазам</h4>
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">AUC по фазам</h4>
               <div className="grid grid-cols-3 gap-4">
-                <div className="bg-amber-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-amber-600 mb-1">Сушка</div>
-                  <div className="text-lg font-semibold text-amber-700">{computed.dry_phase_AUC ?? '—'}</div>
+                <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">Сушка</div>
+                  <div className="text-lg font-semibold text-amber-700 dark:text-amber-300">{computed.dry_phase_AUC ?? '—'}</div>
                 </div>
-                <div className="bg-orange-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-orange-600 mb-1">Майяр</div>
-                  <div className="text-lg font-semibold text-orange-700">{computed.mid_phase_AUC ?? '—'}</div>
+                <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">Майяр</div>
+                  <div className="text-lg font-semibold text-orange-700 dark:text-orange-300">{computed.mid_phase_AUC ?? '—'}</div>
                 </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <div className="text-xs text-red-600 mb-1">Развитие</div>
-                  <div className="text-lg font-semibold text-red-700">{computed.finish_phase_AUC ?? '—'}</div>
+                <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 text-center">
+                  <div className="text-xs text-red-600 dark:text-red-400 mb-1">Развитие</div>
+                  <div className="text-lg font-semibold text-red-700 dark:text-red-300">{computed.finish_phase_AUC ?? '—'}</div>
                 </div>
               </div>
             </div>
@@ -1148,8 +1310,8 @@ export const RoastDetailPage = () => {
 
           {/* Параметры зерна */}
           {profile && (profile.moisture_greens != null || profile.density != null || profile.drumspeed || profile.organization) && (
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Параметры</h4>
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Параметры</h4>
               <div className="grid grid-cols-2 gap-x-8">
                 {profile.moisture_greens != null && (
                   <InfoRow label="Влажность зерна" value={`${profile.moisture_greens}%`} />
@@ -1176,7 +1338,7 @@ export const RoastDetailPage = () => {
             </div>
           )}
 
-          <div className="mt-6 pt-4 border-t border-gray-100">
+          <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-600">
             <div className="grid grid-cols-2 gap-x-8">
               <InfoRow label="Машина" value={machineName || '—'} />
               <InfoRow
@@ -1187,7 +1349,7 @@ export const RoastDetailPage = () => {
           </div>
 
           {!(computed?.CHARGE_BT ?? computed?.TP_time ?? computed?.DRY_time ?? computed?.FCs_time ?? computed?.DROP_time ?? roast?.charge_temp ?? roast?.TP_time ?? roast?.DRY_time ?? roast?.FCs_time ?? roast?.drop_time) && (
-            <p className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
+            <p className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
               Данные о фазах (загрузка, разворот, сушка, первый крэк, выгрузка) берутся из загруженного профиля .alog с разметкой Artisan или из полей обжарки в БД. Если обжарка создана вручную без профиля или профиль без разметки событий — эти поля будут пустыми.
             </p>
           )}
@@ -1199,11 +1361,11 @@ export const RoastDetailPage = () => {
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Температура</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Температура</CardTitle>
           </CardHeader>
           <CardContent>
             {/* Legend with checkboxes - Coffeewave Plus style */}
-            <div className="flex flex-wrap gap-4 mb-4 pb-4 border-b border-gray-100">
+            <div className="flex flex-wrap gap-4 mb-4 pb-4 border-b border-gray-100 dark:border-gray-600">
               <LegendCheckbox checked={showET} onChange={() => setShowET(!showET)} color="#dc2626" label="ET" />
               <LegendCheckbox checked={showDeltaET} onChange={() => setShowDeltaET(!showDeltaET)} color="#fca5a5" label="ΔET" />
               <LegendCheckbox checked={showBT} onChange={() => setShowBT(!showBT)} color="#2563eb" label="BT" />
@@ -1221,17 +1383,17 @@ export const RoastDetailPage = () => {
               <LegendCheckbox checked={showPhaseZones} onChange={() => setShowPhaseZones(!showPhaseZones)} color="#e5e7eb" label="Фазы" />
               
               {/* RoR period selector */}
-              <div className="flex items-center gap-2 ml-4 border-l border-gray-200 pl-4">
-                <span className="text-sm text-gray-600">RoR:</span>
+              <div className="flex items-center gap-2 ml-4 border-l border-gray-200 dark:border-gray-600 pl-4">
+                <span className="text-sm text-gray-600 dark:text-gray-400">RoR:</span>
                 <button
                   onClick={() => setRorPeriod(30)}
-                  className={`px-2 py-1 text-xs rounded ${rorPeriod === 30 ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-2 py-1 text-xs rounded ${rorPeriod === 30 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
                 >
                   30s
                 </button>
                 <button
                   onClick={() => setRorPeriod(60)}
-                  className={`px-2 py-1 text-xs rounded ${rorPeriod === 60 ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-2 py-1 text-xs rounded ${rorPeriod === 60 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
                 >
                   60s
                 </button>
@@ -1388,22 +1550,26 @@ export const RoastDetailPage = () => {
                         else if (event.name === 'Drop' && ti[6] >= 0) eventIdx = ti[6];
                         else if (event.name === 'TP') {
                           // TP is the minimum BT between CHARGE and DRY (or FCs if DRY not set)
-                          const startIdx = ti[0] >= 0 ? ti[0] : 0;
-                          const endIdx = ti[1] >= 0 ? ti[1] : (ti[2] >= 0 ? ti[2] : Math.min(temp2.length - 1, 200));
-                          let minBT = Infinity;
-                          let minIdx = startIdx;
-                          for (let i = startIdx; i <= endIdx && i < temp2.length; i++) {
-                            if (temp2[i] < minBT) {
-                              minBT = temp2[i];
-                              minIdx = i;
+                          if (!temp2) {
+                            eventIdx = -1;
+                          } else {
+                            const startIdx = ti[0] >= 0 ? ti[0] : 0;
+                            const endIdx = ti[1] >= 0 ? ti[1] : (ti[2] >= 0 ? ti[2] : Math.min(temp2.length - 1, 200));
+                            let minBT = Infinity;
+                            let minIdx = startIdx;
+                            for (let i = startIdx; i <= endIdx && i < temp2.length; i++) {
+                              if (temp2[i] < minBT) {
+                                minBT = temp2[i];
+                                minIdx = i;
+                              }
                             }
+                            eventIdx = minIdx;
                           }
-                          eventIdx = minIdx;
                         }
                       }
                       
                       // Fallback: search by time if timeindex not available
-                      if (eventIdx < 0) {
+                      if (eventIdx < 0 && timex) {
                         let bestDiff = Infinity;
                         for (let i = 0; i < timex.length; i++) {
                           const diff = Math.abs(timex[i] - event.time);
@@ -1414,7 +1580,7 @@ export const RoastDetailPage = () => {
                         }
                       }
                       
-                      if (eventIdx < 0 || eventIdx >= temp2.length) return null;
+                      if (!temp2 || !timex || eventIdx < 0 || eventIdx >= temp2.length) return null;
                       
                       // Get actual BT value at this index (temp2 = BT in Artisan)
                       const actualBT = temp2[eventIdx];
@@ -1582,9 +1748,9 @@ export const RoastDetailPage = () => {
       {/* Meta info */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Мета</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Мета</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-gray-500 space-y-1">
+        <CardContent className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
           <p>ID: {roast.id}</p>
           {roast.created_at && <p>Создано: {formatDateTime(roast.created_at)}</p>}
           {roast.updated_at && <p>Обновлено: {formatDateTime(roast.updated_at)}</p>}

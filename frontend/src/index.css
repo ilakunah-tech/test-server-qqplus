@@ -7,11 +7,294 @@
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --border: 0 0% 89.8%;
-    --primary: 282 36% 49%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 283 72% 36%;
+    --primary-foreground: 0 0% 100%;
+  }
+
+  html.light,
+  html:not(.dark) {
+    @apply bg-white;
+  }
+
+  html.dark {
+    @apply bg-gray-900;
+  }
+
+  .dark {
+    --background: 0 0% 9%;
+    --foreground: 0 0% 98%;
+    --border: 0 0% 20%;
+  }
+
+  body {
+    font-family: 'Rubik', Arial, sans-serif;
+    @apply bg-white text-gray-900;
+  }
+
+  html.dark body {
+    @apply bg-gray-900 text-gray-100;
   }
 }
 
-body {
-  font-family: 'Rubik', Arial, sans-serif;
+/* Светлая тема — вне @layer для максимального приоритета над Tailwind dark: */
+html[data-theme="light"] body,
+html.light body {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .min-h-screen,
+html.light .min-h-screen,
+html[data-theme="light"] main,
+html.light main {
+  background-color: #faf5fc !important;
+}
+
+html[data-theme="light"] header,
+html.light header,
+html[data-theme="light"] aside,
+html.light aside {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+html[data-theme="light"] div[class*="rounded-card"],
+html.light div[class*="rounded-card"] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+html[data-theme="light"] a:not([class*="bg-brand"]),
+html.light a:not([class*="bg-brand"]) {
+  color: #374151 !important;
+}
+
+html[data-theme="light"] a:hover:not([class*="bg-brand"]),
+html.light a:hover:not([class*="bg-brand"]) {
+  background-color: #f3f4f6 !important;
+}
+
+html[data-theme="light"] h1,
+html[data-theme="light"] h2,
+html[data-theme="light"] h3,
+html.light h1,
+html.light h2,
+html.light h3 {
+  color: #111827 !important;
+}
+
+/* Шапка QC — светлый текст на тёмно-фиолетовом фоне (исключение из светлой темы) */
+html[data-theme="light"] .qc-page-header h1,
+html[data-theme="light"] .qc-page-header h2,
+html[data-theme="light"] .qc-page-header h3,
+html.light .qc-page-header h1,
+html.light .qc-page-header h2,
+html.light .qc-page-header h3 {
+  color: #ffffff !important;
+}
+html[data-theme="light"] .qc-page-header .qc-page-header-desc,
+html.light .qc-page-header .qc-page-header-desc {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html[data-theme="light"] button:not([class*="bg-brand"]):not(.verdict-dot),
+html.light button:not([class*="bg-brand"]):not(.verdict-dot) {
+  color: #374151 !important;
+  background-color: #ffffff !important;
+  border-color: #d1d5db !important;
+}
+
+/* Кнопки в шапке QC — светлый текст на тёмном фоне */
+html[data-theme="light"] .qc-page-header button:not([class*="bg-qq-yellow"]),
+html.light .qc-page-header button:not([class*="bg-qq-yellow"]) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Select и Input в светлой теме */
+html[data-theme="light"] select,
+html.light select,
+html[data-theme="light"] input[type="text"],
+html[data-theme="light"] input[type="email"],
+html[data-theme="light"] input[type="password"],
+html[data-theme="light"] input[type="number"],
+html[data-theme="light"] input:not([type]),
+html.light input[type="text"],
+html.light input[type="email"],
+html.light input[type="password"],
+html.light input[type="number"],
+html.light input:not([type]) {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Card в светлой теме */
+html[data-theme="light"] [class*="CardContent"],
+html.light [class*="CardContent"],
+html[data-theme="light"] [class*="card"],
+html.light [class*="card"] {
+  background-color: #ffffff !important;
+}
+
+/* Label и текст - исключаем SVG элементы */
+html[data-theme="light"] label:not(svg label),
+html.light label:not(svg label),
+html[data-theme="light"] p:not(svg p),
+html.light p:not(svg p),
+html[data-theme="light"] span:not(svg span):not(.recharts-text):not([class*="plotly"]),
+html.light span:not(svg span):not(.recharts-text):not([class*="plotly"]) {
+  color: #374151 !important;
+}
+
+/* Кнопка с bg-brand сохраняет белый текст */
+html[data-theme="light"] button[class*="bg-brand"],
+html.light button[class*="bg-brand"] {
+  color: #ffffff !important;
+}
+
+/* ========== Dark theme: светлый текст на тёмном фоне ========== */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,
+html[data-theme="dark"] h4 {
+  color: #f3f4f6 !important;
+}
+
+html.dark main,
+html.dark .min-h-screen,
+html[data-theme="dark"] main,
+html[data-theme="dark"] .min-h-screen {
+  background-color: #111827 !important;
+  color: #f3f4f6 !important;
+}
+
+html.dark [class*="CardTitle"]:not([class*="text-"]),
+html[data-theme="dark"] [class*="CardTitle"]:not([class*="text-"]) {
+  color: #f3f4f6 !important;
+}
+
+html.dark [class*="CardDescription"],
+html.dark .text-gray-500,
+html.dark .text-gray-600,
+html.dark .text-gray-700,
+html.dark .text-stone-500,
+html.dark .text-stone-600,
+html.dark .text-stone-700,
+html[data-theme="dark"] [class*="CardDescription"],
+html[data-theme="dark"] .text-gray-500,
+html[data-theme="dark"] .text-gray-600,
+html[data-theme="dark"] .text-gray-700,
+html[data-theme="dark"] .text-stone-500,
+html[data-theme="dark"] .text-stone-600,
+html[data-theme="dark"] .text-stone-700 {
+  color: #9ca3af !important;
+}
+
+/* Только серые thead — фиолетовые заголовки (from-qq-purple) не трогаем */
+html.dark thead.bg-gray-100,
+html.dark thead.bg-gray-50,
+html[data-theme="dark"] thead.bg-gray-100,
+html[data-theme="dark"] thead.bg-gray-50 {
+  background-color: #374151 !important;
+}
+
+html.dark thead.bg-gray-100 th,
+html.dark thead.bg-gray-50 th,
+html[data-theme="dark"] thead.bg-gray-100 th,
+html[data-theme="dark"] thead.bg-gray-50 th {
+  color: #f3f4f6 !important;
+}
+
+html.dark tbody tr,
+html.dark tbody td,
+html[data-theme="dark"] tbody tr,
+html[data-theme="dark"] tbody td {
+  color: #e5e7eb !important;
+}
+
+html.dark tbody tr:hover,
+html[data-theme="dark"] tbody tr:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+}
+
+/* Таблицы и карточки — тёмный фон в dark mode */
+html.dark table,
+html.dark [class*="rounded-card"]:not([class*="from-qq"]):not([class*="bg-qq"]),
+html[data-theme="dark"] table,
+html[data-theme="dark"] [class*="rounded-card"]:not([class*="from-qq"]):not([class*="bg-qq"]) {
+  background-color: #1f2937 !important;
+}
+
+/* Input и Select в тёмной теме */
+html.dark input[type="text"],
+html.dark input[type="email"],
+html.dark input[type="password"],
+html.dark input[type="number"],
+html.dark input[type="date"],
+html.dark input:not([type]),
+html.dark select,
+html.dark textarea,
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="email"],
+html[data-theme="dark"] input[type="password"],
+html[data-theme="dark"] input[type="number"],
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] input:not([type]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+
+html.dark label,
+html[data-theme="dark"] label {
+  color: #e5e7eb !important;
+}
+
+/* Plotly chart text should not be affected by global span styles */
+.js-plotly-plot text,
+.js-plotly-plot tspan,
+.plotly text,
+.plotly tspan,
+svg.main-svg text,
+svg.main-svg tspan {
+  color: inherit !important;
+  fill: currentColor;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+/* Reset any transforms on Plotly axis labels */
+.js-plotly-plot .xtick text,
+.js-plotly-plot .ytick text {
+  writing-mode: horizontal-tb !important;
+}
+
+/* QC Statistics animations */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes number-count {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
