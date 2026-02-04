@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   productionTasksApi,
-  ProductionTaskHistory,
   ProductionTaskSnoozeInput,
 } from '@/api/productionTasks';
 import { getMyMachines } from '@/api/machines';
@@ -12,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Check, Clock, Hash, Calendar, CheckCircle2, BellOff } from 'lucide-react';
-import { formatDate } from '@/utils/formatters';
 
 export const ProductionTasksHistoryPage = () => {
   const [taskFilter, setTaskFilter] = useState<string>('');
@@ -70,11 +68,6 @@ export const ProductionTasksHistoryPage = () => {
   const historyItems = historyData?.data.items ?? [];
   const tasks = tasksData?.data.items ?? [];
   const machines = machinesData ?? [];
-
-  const getTaskTitle = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    return task?.title || taskId;
-  };
 
   return (
     <div className="space-y-6">

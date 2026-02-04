@@ -1,5 +1,4 @@
 import apiClient from './client';
-import { ApiResponse, ListResponse } from '@/types/api';
 
 export interface GoalParameterConfig {
   enabled: boolean;
@@ -37,7 +36,7 @@ export interface RoastGoalUpdate {
 }
 
 export const goalsApi = {
-  getGoals: async (isActive?: boolean): Promise<RoastGoal[]> => {
+  getGoals: async (): Promise<RoastGoal[]> => {
     // Don't send is_active param for now to avoid validation issues
     const response = await apiClient.get<RoastGoal[]>('/roasts/goals');
     // Handle both array response and wrapped response

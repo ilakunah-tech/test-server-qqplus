@@ -66,7 +66,7 @@ export const UsersPage = () => {
     },
     onError: (err: { response?: { data?: { detail?: string | string[] } } }) => {
       const detail = err.response?.data?.detail;
-      const msg = Array.isArray(detail) ? detail[0]?.msg ?? String(detail) : detail ?? 'Failed to delete user';
+      const msg = Array.isArray(detail) ? String(detail[0] ?? detail) : detail ?? 'Failed to delete user';
       setDeleteError(msg);
     },
   });

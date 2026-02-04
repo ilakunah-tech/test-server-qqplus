@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ComparisonChart } from '@/components/RoastComparison/ComparisonChart';
 import { ComparisonTable } from '@/components/RoastComparison/ComparisonTable';
 import { RoastSelector } from '@/components/RoastComparison/RoastSelector';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { roastDisplayId } from '@/utils/formatters';
-import type { Roast } from '@/types/api';
 
 // Color palette for up to 10 roasts
 const ROAST_COLORS = [

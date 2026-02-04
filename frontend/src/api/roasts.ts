@@ -1,6 +1,72 @@
 import apiClient from './client';
 import { ApiResponse, ListResponse, Roast } from '@/types/api';
 
+export interface RoastUpsertPayload {
+  roast_id?: string;
+  id?: string;
+  date?: string;
+  roasted_at?: string;
+  GMT_offset?: number;
+
+  batch_id?: string;
+  coffee_id?: string;
+  blend_id?: string;
+  schedule_id?: string;
+
+  batch_number?: number;
+  label?: string;
+
+  amount?: number;
+  end_weight?: number;
+  weight_loss?: number;
+  defects_weight?: number;
+
+  machine?: string;
+  operator?: string;
+  email?: string;
+
+  // Roast events - temperatures
+  charge_temp?: number;
+  TP_temp?: number;
+  DRY_temp?: number;
+  FCs_temp?: number;
+  FCe_temp?: number;
+  SCs_temp?: number;
+  SCe_temp?: number;
+  drop_temp?: number;
+
+  // Roast events - times (seconds)
+  TP_time?: number;
+  DRY_time?: number;
+  FCs_time?: number;
+  FCe_time?: number;
+  SCs_time?: number;
+  SCe_time?: number;
+  drop_time?: number;
+
+  // Phases
+  DEV_time?: number;
+  DEV_ratio?: number;
+
+  // Quality metrics
+  whole_color?: number;
+  ground_color?: number;
+  cupping_score?: number;
+
+  // Temperature mode
+  mode?: 'C' | 'F';
+  temp_unit?: 'C' | 'F';
+
+  title?: string;
+  roast_level?: string;
+  notes?: string;
+
+  // Telemetry can be nested or top-level arrays (backend supports both)
+  telemetry?: Record<string, unknown>;
+
+  [k: string]: unknown;
+}
+
 export const roastsApi = {
   getRoasts: async (
     limit = 100,
@@ -16,7 +82,7 @@ export const roastsApi = {
     return response.data;
   },
   
-  createRoast: async (data: Omit<Roast, 'id' | 'weight_loss_percent' | 'profile_file' | 'created_at'>): Promise<ApiResponse<Roast>> => {
+  createRoast: async (data: RoastUpsertPayload): Promise<ApiResponse<Roast>> => {
     const response = await apiClient.post<ApiResponse<Roast>>('/roasts', data);
     return response.data;
   },
@@ -147,6 +213,11 @@ export interface AlogProfile {
   timex?: number[];
   temp1?: number[];  // ET (Environmental/Exhaust Temperature)
   temp2?: number[];  // BT (Bean Temperature)
+  air?: number[];
+  drum?: number[];
+  gas?: number[];
+  fan?: number[];
+  heater?: number[];
   
   // Event types and special events
   etypes?: string[];  // ['Air', 'Drum', 'Задвижка', 'Gas', '--']

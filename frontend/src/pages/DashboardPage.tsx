@@ -60,7 +60,7 @@ function useDashboardData() {
 
   const { data: scheduleData } = useQuery({
     queryKey: ['schedule', 'dashboard'],
-    queryFn: () => scheduleApi.getSchedule(undefined, undefined, 20, 0),
+    queryFn: () => scheduleApi.getSchedule(undefined, undefined, undefined, 20, 0),
   });
 
   const { data: blendsData } = useQuery({
@@ -438,9 +438,7 @@ export const DashboardPage = () => {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number, name: string, props) =>
-                        [`${value} roasts`, props.payload.name]
-                      }
+                      formatter={(value: number, name: string) => [`${value} roasts`, name]}
                     />
                   </PieChart>
                 </ResponsiveContainer>

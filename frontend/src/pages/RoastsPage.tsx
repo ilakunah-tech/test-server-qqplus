@@ -296,20 +296,23 @@ export const RoastsPage = () => {
     const formData = new FormData(e.currentTarget);
     const batchId = formData.get('batch_id') as string;
     const batch = batchesData?.data?.items?.find(b => b.id === batchId);
+    const roastUuid = crypto.randomUUID();
     
     createRoastMutation.mutate({
+      roast_id: roastUuid,
+      id: roastUuid,
       batch_id: batchId,
       coffee_id: batch?.coffee_id || '',
-      roast_date: new Date(formData.get('roast_date') as string).toISOString(),
+      roasted_at: new Date(formData.get('roast_date') as string).toISOString(),
       operator: formData.get('operator') as string || undefined,
       machine: formData.get('machine') as string || undefined,
-      green_weight_kg: parseFloat(formData.get('green_weight_kg') as string),
-      roasted_weight_kg: parseFloat(formData.get('roasted_weight_kg') as string),
-      roast_time_sec: formData.get('roast_time_sec') ? parseInt(formData.get('roast_time_sec') as string) : undefined,
+      amount: parseFloat(formData.get('green_weight_kg') as string),
+      end_weight: formData.get('roasted_weight_kg') ? parseFloat(formData.get('roasted_weight_kg') as string) : undefined,
+      drop_time: formData.get('roast_time_sec') ? parseInt(formData.get('roast_time_sec') as string) : undefined,
       drop_temp: formData.get('drop_temp') ? parseInt(formData.get('drop_temp') as string) : undefined,
-      first_crack_temp: formData.get('first_crack_temp') ? parseInt(formData.get('first_crack_temp') as string) : undefined,
-      first_crack_time: formData.get('first_crack_time') ? parseInt(formData.get('first_crack_time') as string) : undefined,
-      agtron: formData.get('agtron') ? parseInt(formData.get('agtron') as string) : undefined,
+      FCs_temp: formData.get('first_crack_temp') ? parseInt(formData.get('first_crack_temp') as string) : undefined,
+      FCs_time: formData.get('first_crack_time') ? parseInt(formData.get('first_crack_time') as string) : undefined,
+      whole_color: formData.get('agtron') ? parseInt(formData.get('agtron') as string) : undefined,
       notes: formData.get('notes') as string || undefined,
     });
   };

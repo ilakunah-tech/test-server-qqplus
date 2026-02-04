@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { roastsApi } from '@/api/roasts';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { X, Search } from 'lucide-react';
 import { roastDisplayId } from '@/utils/formatters';
-import type { Roast } from '@/types/api';
 
 interface RoastSelectorProps {
   selectedIds: string[];
