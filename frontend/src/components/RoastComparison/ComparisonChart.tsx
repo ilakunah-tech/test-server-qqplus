@@ -299,6 +299,16 @@ export function ComparisonChart({
 
   const visibleRoasts = roasts.filter((r) => r.visible);
 
+  // X-axis: one tick per minute (0, 1, 2, ...) to avoid overlapping digits
+  const xTicks = useMemo(() => {
+    if (chartData.data.length === 0) return [0];
+    const maxTime = Math.max(...chartData.data.map((d) => d.time as number));
+    const maxMin = Math.ceil(maxTime / 60) || 1;
+    const ticks: number[] = [];
+    for (let m = 0; m <= maxMin; m++) ticks.push(m * 60);
+    return ticks;
+  }, [chartData.data]);
+
   if (chartData.data.length === 0 || visibleRoasts.length === 0) {
     return (
       <div className="h-[500px] w-full flex items-center justify-center text-gray-500">
@@ -327,16 +337,6 @@ export function ComparisonChart({
     }
     return null;
   };
-
-  // X-axis: one tick per minute (0, 1, 2, ...) to avoid overlapping digits
-  const xTicks = useMemo(() => {
-    if (chartData.data.length === 0) return [0];
-    const maxTime = Math.max(...chartData.data.map((d) => d.time as number));
-    const maxMin = Math.ceil(maxTime / 60) || 1;
-    const ticks: number[] = [];
-    for (let m = 0; m <= maxMin; m++) ticks.push(m * 60);
-    return ticks;
-  }, [chartData.data]);
 
   const formatXAxis = (value: number) => `${Math.round(value / 60)}`;
 
