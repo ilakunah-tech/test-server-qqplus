@@ -262,6 +262,12 @@ async def _enrich_roast_from_profile(roast: Roast, db: AsyncSession) -> dict[str
             if 0 < pct < 50:
                 out["weight_loss"] = pct
 
+    # Green bean label from Artisan profile (plus_coffee_label or beans) for list display
+    if roast.coffee_id and not roast.blend_id:
+        lbl = (profile_data.get("plus_coffee_label") or profile_data.get("beans") or "").strip()
+        if lbl:
+            out["coffee_label"] = lbl
+
     return out
 
 
@@ -433,6 +439,12 @@ async def list_roasts(
         enriched = await _enrich_roast_from_profile(r, db)
         if enriched:
             resp.update(enriched)
+        # Fallback: coffee_label from Coffee table when no .alog profile (for monosort roasts)
+        if r.coffee_id and not r.blend_id and not resp.get("coffee_label"):
+            cr = await db.execute(select(Coffee.label, Coffee.hr_id).where(Coffee.id == r.coffee_id).limit(1))
+            row = cr.first()
+            if row and (row[0] or row[1]):
+                resp["coffee_label"] = (row[0] or row[1] or "").strip() or None
         # Check goals status (only if there are active goals)
         try:
             goals_check = await check_roast_against_goals(r, db)
@@ -519,6 +531,11 @@ async def list_references(
         enriched = await _enrich_roast_from_profile(r, db)
         if enriched:
             resp.update(enriched)
+        if r.coffee_id and not r.blend_id and not resp.get("coffee_label"):
+            cr = await db.execute(select(Coffee.label, Coffee.hr_id).where(Coffee.id == r.coffee_id).limit(1))
+            row = cr.first()
+            if row and (row[0] or row[1]):
+                resp["coffee_label"] = (row[0] or row[1] or "").strip() or None
         ref_items.append(resp)
 
     return {

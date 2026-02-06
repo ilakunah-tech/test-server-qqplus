@@ -14,6 +14,7 @@ class ScheduleBase(BaseModel):
 class ScheduleCreate(ScheduleBase):
     coffee_id: Optional[UUID] = None
     batch_id: Optional[UUID] = None
+    machine_id: Optional[UUID] = None
 
 
 class ScheduleUpdate(BaseModel):
@@ -22,6 +23,24 @@ class ScheduleUpdate(BaseModel):
     scheduled_weight_kg: Optional[float] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    machine_id: Optional[UUID] = None
+
+
+class ScheduleBulkItemCreate(BaseModel):
+    """Single item for bulk schedule create (title required, rest optional)."""
+    title: str
+    scheduled_weight_kg: Optional[float] = None
+    coffee_id: Optional[UUID] = None
+    batch_id: Optional[UUID] = None
+    roast_target: Optional[str] = None  # filter, omni, espresso
+    notes: Optional[str] = None
+
+
+class ScheduleBulkCreate(BaseModel):
+    """Create many schedule items at once (e.g. full day list)."""
+    scheduled_date: date
+    machine_id: Optional[UUID] = None
+    items: list[ScheduleBulkItemCreate]
 
 
 class ScheduleCompleteRequest(BaseModel):
@@ -35,6 +54,8 @@ class ScheduleResponse(ScheduleBase):
     user_id: UUID
     coffee_id: Optional[UUID] = None
     batch_id: Optional[UUID] = None
+    machine_id: Optional[UUID] = None
+    roast_target: Optional[str] = None
     status: str
     completed_at: Optional[datetime] = None
     created_at: datetime

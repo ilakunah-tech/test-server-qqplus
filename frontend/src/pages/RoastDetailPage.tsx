@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatDateTime, roastDisplayId } from '@/utils/formatters';
+import { formatDateTime, roastDisplayId, decodeUnicodeEscapes } from '@/utils/formatters';
 import {
   formatTimeMMSS,
   calculateRoRWithPeriod,
@@ -1036,7 +1036,7 @@ export const RoastDetailPage = () => {
               <>
                 <SummaryRow
                   label="Бленд:"
-                  value={`${roast.blend_hr_id || ''} ${roast.blend_spec.label || ''}`}
+                  value={decodeUnicodeEscapes(`${roast.blend_hr_id || ''} ${roast.blend_spec.label || ''}`)}
                 />
                 <div className="py-2 border-b border-gray-100 dark:border-gray-600">
                   <span className="text-gray-500 dark:text-gray-400 text-sm">Кофе:</span>
@@ -1044,10 +1044,12 @@ export const RoastDetailPage = () => {
                     {roast.blend_spec.ingredients.map((ing, idx) => {
                       const weight = (ing.ratio * (greenWeight || 0)).toFixed(2);
                       const percent = (ing.ratio * 100).toFixed(0);
+                      const coffeeText = decodeUnicodeEscapes(ing.coffee);
+                      const labelText = decodeUnicodeEscapes(ing.label);
                       return (
                         <div key={idx} className="text-sm text-gray-900 dark:text-gray-100 pl-4">
-                          <span className="text-violet-600 dark:text-violet-400 font-medium">{ing.coffee}</span>
-                          {ing.label ? ` ${ing.label}` : ''} — {weight} кг ({percent}%)
+                          <span className="text-violet-600 dark:text-violet-400 font-medium">{coffeeText}</span>
+                          {labelText ? ` ${labelText}` : ''} — {weight} кг ({percent}%)
                         </div>
                       );
                     })}
@@ -1060,9 +1062,9 @@ export const RoastDetailPage = () => {
                 value={
                   <span>
                     {profile?.plus_coffee && (
-                      <span className="text-violet-600 dark:text-violet-400 font-medium">{profile.plus_coffee} </span>
+                      <span className="text-violet-600 dark:text-violet-400 font-medium">{decodeUnicodeEscapes(profile.plus_coffee)} </span>
                     )}
-                    {beans || roast.coffee_id || '—'}
+                    {decodeUnicodeEscapes(beans || roast.coffee_id?.toString()) || '—'}
                   </span>
                 } 
               />

@@ -15,7 +15,7 @@ import { Select } from '@/components/ui/select';
 import { Plus, Upload, Download, Trash2, Search, Filter, RefreshCw, FileDown, LayoutGrid, Pencil, MoreVertical, ChevronLeft, ChevronRight, GitCompare, Printer } from 'lucide-react';
 import { EditRoastInfoDialog } from '@/components/Roasts/EditRoastInfoDialog';
 import { authStore } from '@/store/authStore';
-import { formatDateTimeTable, formatWeight, formatPercent, roastDisplayId } from '@/utils/formatters';
+import { formatDateTimeTable, formatWeight, formatPercent, roastDisplayId, decodeUnicodeEscapes } from '@/utils/formatters';
 import { calculateWeightLoss, formatTimeMMSS } from '@/utils/roastCalculations';
 import { exportToCSV, exportToExcel, EXPORT_COLUMNS, type ExportFormat, type ExportScope } from '@/utils/exportRoasts';
 import { StickerPrint } from '@/components/StickerPrint/StickerPrint';
@@ -921,7 +921,7 @@ export const RoastsPage = () => {
                             </td>
                             <td className="py-2 px-4 text-gray-600 whitespace-nowrap">{formatDateTimeTable(roastDate)}</td>
                             <td className="py-2 px-4 font-medium text-gray-900">{r.title ?? r.label ?? '—'}</td>
-                            <td className="py-2 px-4 text-gray-700">{r.coffee_hr_id ?? r.blend_spec?.label ?? r.blend_hr_id ?? '—'}</td>
+                            <td className="py-2 px-4 text-gray-700">{decodeUnicodeEscapes(r.coffee_label ?? r.blend_spec?.label ?? r.coffee_hr_id ?? r.blend_hr_id ?? '—')}</td>
                             <td className="py-2 px-4 text-gray-600 text-xs">{r.machine ?? '—'}</td>
                             <td className="py-2 px-4 text-gray-700">{formatWeight(Number(r.green_weight_kg) || 0)}</td>
                             <td className="py-2 px-4 text-gray-700">
@@ -1644,11 +1644,14 @@ export const RoastsPage = () => {
                   case 'name': {
                     const nameVal = roast.title ?? roast.label ?? '—';
                     const blendVal = roast.blend_spec?.label ?? roast.blend_hr_id ?? '';
+                    const coffeeVal = roast.coffee_id && !roast.blend_id ? (roast.coffee_label ?? '') : '';
+                    const subVal = blendVal || coffeeVal;
+                    const subDisplay = decodeUnicodeEscapes(subVal);
                     if (!canEditRoasts) {
                       return (
-                        <div className="truncate" title={[nameVal, blendVal].filter(Boolean).join(' / ')}>
+                        <div className="truncate" title={[nameVal, subDisplay].filter(Boolean).join(' / ')}>
                           <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{nameVal}</span>
-                          {blendVal && <span className="text-gray-500 dark:text-gray-400 truncate block">{blendVal}</span>}
+                          {subDisplay && <span className="text-gray-500 dark:text-gray-400 truncate block">{subDisplay}</span>}
                         </div>
                       );
                     }
@@ -1659,9 +1662,9 @@ export const RoastsPage = () => {
                         className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1"
                         title={t('roasts.clickToEdit')}
                       >
-                        <div className="truncate" title={[nameVal, blendVal].filter(Boolean).join(' / ')}>
+                        <div className="truncate" title={[nameVal, subDisplay].filter(Boolean).join(' / ')}>
                           <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{nameVal}</span>
-                          {blendVal && <span className="text-gray-500 dark:text-gray-400 truncate block">{blendVal}</span>}
+                          {subDisplay && <span className="text-gray-500 dark:text-gray-400 truncate block">{subDisplay}</span>}
                         </div>
                       </button>
                     );
@@ -1729,9 +1732,11 @@ export const RoastsPage = () => {
                     return <span className="text-gray-600 dark:text-gray-300">{roast.whole_color != null && roast.whole_color !== 0 ? String(roast.whole_color) : '—'}</span>;
                   case 'grind_color':
                     return <span className="text-gray-600 dark:text-gray-300">{roast.ground_color != null && roast.ground_color !== 0 ? String(roast.ground_color) : '—'}</span>;
-                  case 'coffee':
-                    const coffeeVal = roast.coffee_hr_id ?? roast.blend_spec?.label ?? roast.label ?? '—';
-                    return <span className="text-gray-700 dark:text-gray-200 truncate block" title={String(coffeeVal)}>{coffeeVal}</span>;
+                  case 'coffee': {
+                    const coffeeVal = roast.coffee_label ?? roast.blend_spec?.label ?? roast.coffee_hr_id ?? roast.label ?? '—';
+                    const displayVal = decodeUnicodeEscapes(coffeeVal);
+                    return <span className="text-gray-700 dark:text-gray-200 truncate block" title={displayVal}>{displayVal}</span>;
+                  }
                   case 'rating':
                     if (!canEditRoasts) return <span className="text-gray-500 dark:text-gray-400">—</span>;
                     return (

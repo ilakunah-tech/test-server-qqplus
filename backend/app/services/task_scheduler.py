@@ -1,23 +1,39 @@
 """
 Background service for checking and triggering production tasks.
+
+Uses the TZ env-var (set in docker-compose) to determine local time.
+Falls back to Europe/Moscow when TZ is unset (Docker default = UTC).
 """
-import asyncio
-import logging
+import os
+import structlog
 from datetime import datetime, date, time, timedelta
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
+
+import pytz  # already installed via APScheduler
 
 from app.db.session import AsyncSessionLocal
 from app.models.production_task import ProductionTask, ProductionTaskHistory
 from app.models.user_machine import UserMachine
 from app.ws.notifications import manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+# Determine the timezone we operate in (defaults to Moscow when TZ is unset or "UTC")
+_tz_name = os.environ.get("TZ") or "Europe/Moscow"
+try:
+    LOCAL_TZ = pytz.timezone(_tz_name)
+except pytz.exceptions.UnknownTimeZoneError:
+    LOCAL_TZ = pytz.timezone("Europe/Moscow")
+
+
+def _local_now() -> datetime:
+    """Return current date-time in the configured local timezone (naive)."""
+    return datetime.now(LOCAL_TZ).replace(tzinfo=None)
 
 scheduler = AsyncIOScheduler()
 
@@ -53,19 +69,20 @@ async def trigger_task_notification(
         db.add(history)
         
         # Update task
-        task.last_triggered_at = datetime.utcnow()
+        task.last_triggered_at = _local_now()
         if triggered_by_roast_id:
             task.last_triggered_roast_id = triggered_by_roast_id
         
         await db.commit()
         await db.refresh(history)
         
-        # Send WebSocket notification
+        # Send WebSocket notification (only to task owner)
         await manager.send_notification(
             event_type="production_task",
             payload={
                 "task_id": str(task.id),
                 "history_id": str(history.id),
+                "user_id": str(task.user_id),
                 "title": task.title,
                 "notification_text": task.notification_text,
                 "task_type": task.task_type,
@@ -73,25 +90,30 @@ async def trigger_task_notification(
                 "machine_name": machine_name,
                 "triggered_at": history.triggered_at.isoformat(),
                 "trigger_reason": trigger_reason,
-            }
+            },
+            target_user_id=str(task.user_id),
         )
         
-        logger.info(f"Triggered task notification: {task.id} - {task.title}")
+        logger.info("Triggered task notification", task_id=str(task.id), title=task.title, ws_connections=len(manager.active_connections))
         
     except Exception as e:
-        logger.error(f"Error triggering task notification: {e}", exc_info=True)
+        logger.error("Error triggering task notification", error=str(e), exc_info=True)
         await db.rollback()
 
 
 async def check_scheduled_tasks() -> None:
-    """Check and trigger schedule-type tasks"""
+    """Check and trigger schedule-type tasks.
+    Uses datetime.now() so the container TZ env var controls the timezone.
+    """
     async with AsyncSessionLocal() as db:
         try:
-            now = datetime.utcnow()
+            now = _local_now()
             current_day = now.weekday()  # 0=Monday, 6=Sunday
             current_time = now.time().replace(second=0, microsecond=0)
-            
-            # Get all active schedule tasks
+
+            logger.debug("Checking scheduled tasks", day=current_day, time=str(current_time), tz=_tz_name)
+
+            # Get all active schedule tasks for today's weekday
             query = select(ProductionTask).where(
                 and_(
                     ProductionTask.task_type == "schedule",
@@ -100,63 +122,73 @@ async def check_scheduled_tasks() -> None:
                     ProductionTask.schedule_time == current_time
                 )
             )
-            
+
             result = await db.execute(query)
             tasks = result.scalars().all()
-            
+
             for task in tasks:
-                # Check if already triggered today
+                # Check if already triggered today (strip tz from DB value for safe compare)
                 today_start = datetime.combine(now.date(), time.min)
-                if task.last_triggered_at and task.last_triggered_at >= today_start:
+                lta = task.last_triggered_at.replace(tzinfo=None) if task.last_triggered_at and task.last_triggered_at.tzinfo else task.last_triggered_at
+                if lta and lta >= today_start:
                     continue  # Already triggered today
-                
+
+                logger.info("Triggering scheduled task", task_id=str(task.id), title=task.title)
                 await trigger_task_notification(
                     db,
                     task,
                     trigger_reason="schedule_time"
                 )
-                
+
         except Exception as e:
-            logger.error(f"Error checking scheduled tasks: {e}", exc_info=True)
+            logger.error("Error checking scheduled tasks", error=str(e), exc_info=True)
 
 
 async def check_one_time_tasks() -> None:
-    """Check and trigger one_time tasks"""
+    """Check and trigger one_time tasks.
+    Fires when scheduled_date <= today AND (no time set OR scheduled_time <= now).
+    Uses datetime.now() so the container TZ env var controls the timezone.
+    """
     async with AsyncSessionLocal() as db:
         try:
-            now = datetime.utcnow()
+            now = _local_now()
             current_date = now.date()
             current_time = now.time().replace(second=0, microsecond=0)
-            
-            # Get all active one_time tasks
+
+            logger.info("Checking one_time tasks", date=str(current_date), time=str(current_time), tz=_tz_name)
+
+            # Get all active one_time tasks where the date has arrived
             query = select(ProductionTask).where(
                 and_(
                     ProductionTask.task_type == "one_time",
                     ProductionTask.is_active == True,
-                    ProductionTask.scheduled_date == current_date
+                    ProductionTask.scheduled_date <= current_date
                 )
             )
-            
+
             result = await db.execute(query)
             tasks = result.scalars().all()
-            
+
             for task in tasks:
-                # Check if scheduled_time matches (if specified)
-                if task.scheduled_time:
-                    if task.scheduled_time != current_time:
-                        continue
-                
-                # Check if already triggered today
+                # If scheduled_time is set and the date is today, check the time
+                if task.scheduled_time and task.scheduled_date == current_date:
+                    task_time = task.scheduled_time.replace(second=0, microsecond=0)
+                    if task_time > current_time:
+                        continue  # Not yet time today
+
+                # Check if already triggered today (strip tz from DB value for safe compare)
                 today_start = datetime.combine(current_date, time.min)
-                if task.last_triggered_at and task.last_triggered_at >= today_start:
+                lta = task.last_triggered_at.replace(tzinfo=None) if task.last_triggered_at and task.last_triggered_at.tzinfo else task.last_triggered_at
+                if lta and lta >= today_start:
                     continue  # Already triggered today
-                
+
+                logger.info("Triggering one_time task", task_id=str(task.id), title=task.title)
                 await trigger_task_notification(
                     db,
                     task,
                     trigger_reason="one_time_date"
                 )
-                
+
                 # Handle repeat_after_days if set
                 if task.repeat_after_days:
                     task.scheduled_date = current_date + timedelta(days=task.repeat_after_days)
@@ -166,9 +198,9 @@ async def check_one_time_tasks() -> None:
                     # Deactivate one-time task if not repeating
                     task.is_active = False
                     await db.commit()
-                    
+
         except Exception as e:
-            logger.error(f"Error checking one_time tasks: {e}", exc_info=True)
+            logger.error("Error checking one_time tasks", error=str(e), exc_info=True)
 
 
 async def check_counter_tasks(db: AsyncSession, roast_id: UUID, machine_id: Optional[UUID] = None) -> None:
@@ -223,8 +255,62 @@ async def check_counter_tasks(db: AsyncSession, roast_id: UUID, machine_id: Opti
                 await db.commit()
                 
     except Exception as e:
-        logger.error(f"Error checking counter tasks: {e}", exc_info=True)
+        logger.error("Error checking counter tasks", error=str(e), exc_info=True)
         await db.rollback()
+
+
+async def remind_uncompleted_tasks() -> None:
+    """Re-send WebSocket notifications for uncompleted task history items.
+
+    Runs every 5 minutes.  Only items triggered within the last 24 hours
+    that have NOT been marked completed (and are not currently snoozed)
+    will receive a reminder.
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            # Use SQL func.now() so Postgres handles tz-aware comparison internally
+            cutoff = func.now() - timedelta(hours=24)
+
+            query = select(ProductionTaskHistory).where(
+                and_(
+                    ProductionTaskHistory.marked_completed_at.is_(None),
+                    ProductionTaskHistory.triggered_at >= cutoff,
+                    or_(
+                        ProductionTaskHistory.snoozed_until.is_(None),
+                        ProductionTaskHistory.snoozed_until <= func.now(),
+                    ),
+                )
+            )
+
+            result = await db.execute(query)
+            items = result.scalars().all()
+
+            sent = 0
+            for item in items:
+                await manager.send_notification(
+                    event_type="production_task",
+                    payload={
+                        "task_id": str(item.task_id),
+                        "history_id": str(item.id),
+                        "user_id": str(item.user_id),
+                        "title": item.title,
+                        "notification_text": item.notification_text,
+                        "task_type": item.task_type,
+                        "machine_id": str(item.machine_id) if item.machine_id else None,
+                        "machine_name": item.machine_name,
+                        "triggered_at": item.triggered_at.isoformat() if item.triggered_at else None,
+                        "trigger_reason": item.trigger_reason,
+                        "is_reminder": True,
+                    },
+                    target_user_id=str(item.user_id),
+                )
+                sent += 1
+
+            if sent:
+                logger.info("Sent reminder notifications", count=sent)
+
+        except Exception as e:
+            logger.error("Error sending task reminders", error=str(e), exc_info=True)
 
 
 def start_scheduler() -> None:
@@ -244,9 +330,17 @@ def start_scheduler() -> None:
         id="check_one_time_tasks",
         replace_existing=True
     )
-    
+
+    # Remind about uncompleted tasks every 5 minutes
+    scheduler.add_job(
+        remind_uncompleted_tasks,
+        trigger=CronTrigger(minute="*/5", second=30),  # at :30s to avoid overlap with checks
+        id="remind_uncompleted_tasks",
+        replace_existing=True
+    )
+
     scheduler.start()
-    logger.info("Task scheduler started")
+    logger.info("Task scheduler started", timezone=_tz_name, local_now=str(_local_now()))
 
 
 def stop_scheduler() -> None:

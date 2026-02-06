@@ -17,5 +17,6 @@ class UserMachine(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="machines")
+    schedules = relationship("Schedule", back_populates="machine")
 
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_machines_user_name"),)

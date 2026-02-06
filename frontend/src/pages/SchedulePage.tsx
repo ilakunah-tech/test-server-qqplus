@@ -1,35 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scheduleApi } from '@/api/schedule';
 import { inventoryApi } from '@/api/inventory';
 import { roastsApi } from '@/api/roasts';
+import { getMyMachines } from '@/api/machines';
+import { getBlends } from '@/api/blends';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Plus, Check, X, Trash2, ExternalLink, RotateCcw } from 'lucide-react';
+import { Plus, Check, X, Trash2, ExternalLink, RotateCcw, ListPlus } from 'lucide-react';
 import { formatDate, roastDisplayId } from '@/utils/formatters';
 import { Schedule } from '@/types/api';
 
 export const SchedulePage = () => {
   const [showForm, setShowForm] = useState(false);
+  const [showBulkForm, setShowBulkForm] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [coffeeFilter, setCoffeeFilter] = useState('');
+  const [machineFilter, setMachineFilter] = useState('');
   const [completeScheduleId, setCompleteScheduleId] = useState<string | null>(null);
   const [selectedRoastId, setSelectedRoastId] = useState('');
+  const ROAST_TARGET_OPTIONS = [
+    { value: '', label: '— Под что жарится —' },
+    { value: 'filter', label: 'Фильтр' },
+    { value: 'omni', label: 'Омни' },
+    { value: 'espresso', label: 'Эспрессо' },
+  ] as const;
+  type BulkRow = { id: string; coffeeId: string; blendId: string; weight: string; roastTarget: string };
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([
+    { id: crypto.randomUUID(), coffeeId: '', blendId: '', weight: '', roastTarget: '' },
+  ]);
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (showBulkForm) {
+      setBulkRows([{ id: crypto.randomUUID(), coffeeId: '', blendId: '', weight: '', roastTarget: '' }]);
+    }
+  }, [showBulkForm]);
+
   const { data: scheduleData } = useQuery({
-    queryKey: ['schedule', dateFrom, dateTo, coffeeFilter],
+    queryKey: ['schedule', dateFrom, dateTo, coffeeFilter, machineFilter],
     queryFn: () =>
       scheduleApi.getSchedule(
         dateFrom || undefined,
         dateTo || undefined,
-        coffeeFilter || undefined
+        coffeeFilter || undefined,
+        machineFilter || undefined
       ),
+  });
+
+  const { data: myMachines = [] } = useQuery({
+    queryKey: ['machines', 'my'],
+    queryFn: getMyMachines,
   });
 
   const { data: coffeesData } = useQuery({
@@ -40,6 +66,11 @@ export const SchedulePage = () => {
   const { data: batchesData } = useQuery({
     queryKey: ['batches'],
     queryFn: () => inventoryApi.getBatches(),
+  });
+
+  const { data: blendsData } = useQuery({
+    queryKey: ['blends'],
+    queryFn: () => getBlends(),
   });
 
   const { data: roastsData } = useQuery({
@@ -81,6 +112,14 @@ export const SchedulePage = () => {
     },
   });
 
+  const createScheduleBulkMutation = useMutation({
+    mutationFn: scheduleApi.createScheduleBulk,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedule'] });
+      setShowBulkForm(false);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -97,7 +136,65 @@ export const SchedulePage = () => {
       scheduled_weight_kg: weight ? parseFloat(weight) : undefined,
       coffee_id: coffeeId,
       batch_id: (formData.get('batch_id') as string) || undefined,
+      machine_id: (formData.get('machine_id') as string) || undefined,
       notes: (formData.get('notes') as string) || undefined,
+    });
+  };
+
+  const addBulkRow = () => {
+    setBulkRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), coffeeId: '', blendId: '', weight: '', roastTarget: '' },
+    ]);
+  };
+
+  const removeBulkRow = (id: string) => {
+    setBulkRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
+  };
+
+  const updateBulkRow = (id: string, field: keyof BulkRow, value: string) => {
+    setBulkRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const next = { ...r, [field]: value };
+        if (field === 'coffeeId') next.blendId = '';
+        if (field === 'blendId') next.coffeeId = '';
+        return next;
+      })
+    );
+  };
+
+  const handleBulkSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const scheduled_date = formData.get('scheduled_date') as string;
+    const machine_id = (formData.get('machine_id') as string) || undefined;
+    const coffees = coffeesData?.data?.items ?? [];
+    const blends = blendsData?.items ?? [];
+    const items = bulkRows
+      .map((row) => {
+        const coffeeId = row.coffeeId || undefined;
+        const blendId = row.blendId || undefined;
+        const title = coffeeId
+          ? coffees.find((c) => c.id === coffeeId)?.label || coffees.find((c) => c.id === coffeeId)?.name
+          : blendId
+            ? blends.find((b) => b.id === blendId)?.name
+            : null;
+        if (!title) return null;
+        const weight = row.weight ? parseFloat(row.weight.replace(',', '.')) : undefined;
+        return {
+          title,
+          scheduled_weight_kg: Number.isFinite(weight) ? weight : undefined,
+          coffee_id: coffeeId,
+          roast_target: row.roastTarget || undefined,
+        };
+      })
+      .filter(Boolean) as { title: string; scheduled_weight_kg?: number; coffee_id?: string; roast_target?: string }[];
+    if (!scheduled_date || items.length === 0) return;
+    createScheduleBulkMutation.mutate({
+      scheduled_date,
+      machine_id,
+      items,
     });
   };
 
@@ -115,13 +212,19 @@ export const SchedulePage = () => {
   const getRoastForSchedule = (scheduleId: string) =>
     roasts.find((r) => r.schedule_id === scheduleId);
 
+  const getMachineName = (machineId: string | undefined) => {
+    if (!machineId) return null;
+    return myMachines.find((m) => m.id === machineId)?.name ?? null;
+  };
+
   const clearFilters = () => {
     setDateFrom('');
     setDateTo('');
     setCoffeeFilter('');
+    setMachineFilter('');
   };
 
-  const hasActiveFilters = dateFrom || dateTo || coffeeFilter;
+  const hasActiveFilters = Boolean(dateFrom || dateTo || coffeeFilter || machineFilter);
 
   return (
     <div className="space-y-6">
@@ -168,6 +271,22 @@ export const SchedulePage = () => {
               ))}
             </Select>
           </div>
+          <div>
+            <Label htmlFor="machine_filter" className="text-sm">Ростер</Label>
+            <Select
+              id="machine_filter"
+              value={machineFilter}
+              onChange={(e) => setMachineFilter(e.target.value)}
+              className="mt-1 min-w-[180px]"
+            >
+              <option value="">— Все —</option>
+              {myMachines.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
         {hasActiveFilters && (
           <Button variant="outline" size="sm" onClick={clearFilters} className="gap-2">
@@ -175,11 +294,136 @@ export const SchedulePage = () => {
             Сбросить фильтры
           </Button>
         )}
-        <Button onClick={() => setShowForm(!showForm)} className="ml-auto gap-2">
+        <Button variant="outline" onClick={() => setShowBulkForm(!showBulkForm)} className="ml-auto gap-2">
+          <ListPlus className="w-4 h-4" />
+          Добавить список на день
+        </Button>
+        <Button onClick={() => setShowForm(!showForm)} className="gap-2">
           <Plus className="w-4 h-4" />
           Add Schedule
         </Button>
       </div>
+
+      {showBulkForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Добавить список обжарок на день</CardTitle>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Выберите дату и ростер, добавьте лоты — зерно или бленд в каждой строке.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleBulkSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="bulk_scheduled_date">Дата *</Label>
+                  <Input
+                    id="bulk_scheduled_date"
+                    name="scheduled_date"
+                    type="date"
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bulk_machine_id">Ростер</Label>
+                  <Select id="bulk_machine_id" name="machine_id" className="mt-1">
+                    <option value="">— Не указан —</option>
+                    {myMachines.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="block mb-2">Список лотов</Label>
+                <div className="space-y-2">
+                  {bulkRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex flex-nowrap items-center gap-2 min-w-0"
+                    >
+                      <Select
+                        value={row.coffeeId}
+                        onChange={(e) => updateBulkRow(row.id, 'coffeeId', e.target.value)}
+                        className="w-[180px] shrink-0"
+                      >
+                        <option value="">— Моносорт —</option>
+                        {(coffeesData?.data?.items ?? []).map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label ?? c.name ?? c.hr_id}
+                          </option>
+                        ))}
+                      </Select>
+                      <Select
+                        value={row.blendId}
+                        onChange={(e) => updateBulkRow(row.id, 'blendId', e.target.value)}
+                        className="w-[180px] shrink-0"
+                      >
+                        <option value="">— Бленд —</option>
+                        {(blendsData?.items ?? []).map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Вес (кг)"
+                        value={row.weight}
+                        onChange={(e) => updateBulkRow(row.id, 'weight', e.target.value)}
+                        className="w-20 shrink-0"
+                      />
+                      <Select
+                        value={row.roastTarget}
+                        onChange={(e) => updateBulkRow(row.id, 'roastTarget', e.target.value)}
+                        className="w-[160px] shrink-0"
+                      >
+                        {ROAST_TARGET_OPTIONS.map((opt) => (
+                          <option key={opt.value || 'empty'} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={addBulkRow}
+                        title="Добавить лот"
+                        className="shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeBulkRow(row.id)}
+                        title="Удалить"
+                        className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={createScheduleBulkMutation.isPending}>
+                  {createScheduleBulkMutation.isPending ? 'Создаём…' : 'Создать все'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowBulkForm(false)}>
+                  Отмена
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {showForm && (
         <Card>
@@ -207,6 +451,17 @@ export const SchedulePage = () => {
                     {batches.map((batch) => (
                       <option key={batch.id} value={batch.id}>
                         {batch.lot_number}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="machine_id">Ростер</Label>
+                  <Select id="machine_id" name="machine_id" className="mt-1">
+                    <option value="">— Не указан —</option>
+                    {myMachines.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
                       </option>
                     ))}
                   </Select>
@@ -260,6 +515,7 @@ export const SchedulePage = () => {
           <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Дата</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Ростер</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Название / Зерно</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Вес (кг)</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Батч</th>
@@ -277,6 +533,9 @@ export const SchedulePage = () => {
                 <tr key={schedule.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                     {formatDate(schedule.scheduled_date)}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                    {getMachineName(schedule.machine_id) ?? '—'}
                   </td>
                   <td className="px-4 py-3">
                     <div>

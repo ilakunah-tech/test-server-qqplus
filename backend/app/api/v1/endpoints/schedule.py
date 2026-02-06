@@ -10,12 +10,14 @@ from app.models.schedule import Schedule
 from app.models.coffee import Coffee
 from app.models.batch import Batch
 from app.models.roast import Roast
+from app.models.user_machine import UserMachine
 from app.schemas.schedule import (
     ScheduleCreate,
     ScheduleUpdate,
     ScheduleResponse,
     ScheduleListResponse,
     ScheduleCompleteRequest,
+    ScheduleBulkCreate,
 )
 
 router = APIRouter()
@@ -28,12 +30,13 @@ async def list_schedule(
     status: Optional[str] = Query(None, description="Filter by status (pending/completed)"),
     coffee_id: Optional[UUID] = Query(None, description="Filter by coffee_id"),
     batch_id: Optional[UUID] = Query(None, description="Filter by batch_id"),
+    machine_id: Optional[UUID] = Query(None, description="Filter by machine/roaster"),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_full_access),
 ):
-    """List schedules with optional filters (status, coffee_id, batch_id, date range)."""
+    """List schedules with optional filters (status, coffee_id, batch_id, machine_id, date range)."""
     query = select(Schedule).where(Schedule.user_id == current_user.id)
     count_query = select(func.count()).select_from(Schedule).where(Schedule.user_id == current_user.id)
 
@@ -46,6 +49,9 @@ async def list_schedule(
     if batch_id:
         query = query.where(Schedule.batch_id == batch_id)
         count_query = count_query.where(Schedule.batch_id == batch_id)
+    if machine_id:
+        query = query.where(Schedule.machine_id == machine_id)
+        count_query = count_query.where(Schedule.machine_id == machine_id)
     if date_from:
         query = query.where(Schedule.scheduled_date >= date_from)
         count_query = count_query.where(Schedule.scheduled_date >= date_from)
@@ -67,6 +73,21 @@ async def list_schedule(
     }
 
 
+async def _check_machine_belongs_to_user(
+    db: AsyncSession, machine_id: Optional[UUID], user_id: UUID
+) -> None:
+    if not machine_id:
+        return
+    r = await db.execute(
+        select(UserMachine).where(
+            UserMachine.id == machine_id,
+            UserMachine.user_id == user_id,
+        )
+    )
+    if not r.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Machine not found")
+
+
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     schedule_data: ScheduleCreate,
@@ -74,6 +95,7 @@ async def create_schedule(
     current_user: User = Depends(require_full_access),
 ):
     """Create a new schedule item."""
+    await _check_machine_belongs_to_user(db, schedule_data.machine_id, current_user.id)
     if schedule_data.coffee_id:
         coffee_result = await db.execute(select(Coffee).where(Coffee.id == schedule_data.coffee_id))
         if not coffee_result.scalar_one_or_none():
@@ -90,14 +112,54 @@ async def create_schedule(
         scheduled_weight_kg=schedule_data.scheduled_weight_kg,
         coffee_id=schedule_data.coffee_id,
         batch_id=schedule_data.batch_id,
+        machine_id=schedule_data.machine_id,
         notes=schedule_data.notes,
         status="pending",
     )
     db.add(schedule)
     await db.commit()
     await db.refresh(schedule)
-    
+
     return {"data": ScheduleResponse.model_validate(schedule)}
+
+
+@router.post("/bulk", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def create_schedule_bulk(
+    body: ScheduleBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """Create multiple schedule items at once (e.g. full day list for one roaster)."""
+    if not body.items:
+        raise HTTPException(status_code=400, detail="items cannot be empty")
+    await _check_machine_belongs_to_user(db, body.machine_id, current_user.id)
+    created = []
+    for item in body.items:
+        if not (item.title and item.title.strip()):
+            continue
+        schedule = Schedule(
+            user_id=current_user.id,
+            title=item.title.strip(),
+            scheduled_date=body.scheduled_date,
+            scheduled_weight_kg=item.scheduled_weight_kg,
+            coffee_id=item.coffee_id,
+            batch_id=item.batch_id,
+            machine_id=body.machine_id,
+            roast_target=item.roast_target,
+            notes=item.notes,
+            status="pending",
+        )
+        db.add(schedule)
+        created.append(schedule)
+    await db.commit()
+    for s in created:
+        await db.refresh(s)
+    return {
+        "data": {
+            "items": [ScheduleResponse.model_validate(s) for s in created],
+            "total": len(created),
+        }
+    }
 
 
 @router.get("/{schedule_id}", response_model=dict)
@@ -170,9 +232,11 @@ async def update_schedule(
         raise HTTPException(status_code=404, detail="Schedule not found")
     
     update_data = schedule_data.model_dump(exclude_unset=True)
+    if "machine_id" in update_data:
+        await _check_machine_belongs_to_user(db, update_data["machine_id"], current_user.id)
     for key, value in update_data.items():
         setattr(schedule, key, value)
-    
+
     await db.commit()
     await db.refresh(schedule)
     return {"data": ScheduleResponse.model_validate(schedule)}

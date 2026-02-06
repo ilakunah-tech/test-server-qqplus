@@ -43,6 +43,17 @@ export const formatPercent = (value: number): string => {
   return `${value.toFixed(1)}%`;
 };
 
+/**
+ * Decode Unicode escape sequences (e.g. \u042d\u0444 → Эф) in strings from .alog profiles.
+ * Artisan may store Cyrillic as literal \uXXXX sequences that JSON.parse does not decode.
+ */
+export function decodeUnicodeEscapes(value: string | null | undefined): string {
+  if (value == null || typeof value !== 'string') return value ?? '';
+  return value.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
 /** Roast display ID: #roast_seq (server) and optionally Rbatch_number (Artisan) */
 export function roastDisplayId(roast: { roast_seq?: number; batch_number?: number }): string {
   const seq = roast.roast_seq;

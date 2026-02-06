@@ -44,6 +44,18 @@ export const ProductionTasksPage = () => {
       setShowForm(false);
       resetForm();
     },
+    onError: (err: any) => {
+      const isNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+      if (isNetworkError) {
+        queryClient.invalidateQueries({ queryKey: ['production-tasks'] });
+        setShowForm(false);
+        resetForm();
+        alert('Запрос выполнен, но ответ не получен. Список обновлён — проверьте, появилась ли задача.');
+      } else {
+        const msg = err?.response?.data?.detail ?? err?.message ?? 'Ошибка создания задачи';
+        alert(Array.isArray(msg) ? msg.map((m: any) => m?.msg ?? m).join(', ') : msg);
+      }
+    },
   });
 
   const updateTaskMutation = useMutation({
@@ -53,6 +65,18 @@ export const ProductionTasksPage = () => {
       queryClient.invalidateQueries({ queryKey: ['production-tasks'] });
       setEditingTask(null);
       resetForm();
+    },
+    onError: (err: any) => {
+      const isNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+      if (isNetworkError) {
+        queryClient.invalidateQueries({ queryKey: ['production-tasks'] });
+        setEditingTask(null);
+        resetForm();
+        alert('Запрос выполнен, но ответ не получен. Список обновлён — проверьте изменения.');
+      } else {
+        const msg = err?.response?.data?.detail ?? err?.message ?? 'Ошибка сохранения задачи';
+        alert(Array.isArray(msg) ? msg.map((m: any) => m?.msg ?? m).join(', ') : msg);
+      }
     },
   });
 
@@ -80,29 +104,36 @@ export const ProductionTasksPage = () => {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const formTaskType = (formData.get('task_type') as string) || taskType;
+    const resolvedType = formTaskType as 'schedule' | 'counter' | 'one_time';
 
     const baseData: ProductionTaskCreateInput = {
-      title: formData.get('title') as string,
-      description: (formData.get('description') as string) || undefined,
-      notification_text: formData.get('notification_text') as string,
-      task_type: taskType,
+      title: (formData.get('title') as string)?.trim() || '',
+      description: ((formData.get('description') as string) || '')?.trim() || undefined,
+      notification_text: (formData.get('notification_text') as string)?.trim() || '',
+      task_type: resolvedType,
       is_active: formData.get('is_active') === 'true',
     };
 
-    if (taskType === 'schedule') {
-      baseData.schedule_day_of_week = parseInt(formData.get('schedule_day_of_week') as string);
-      baseData.schedule_time = formData.get('schedule_time') as string;
-      baseData.machine_id = (formData.get('machine_id') as string) || undefined;
-    } else if (taskType === 'counter') {
-      baseData.counter_trigger_value = parseInt(formData.get('counter_trigger_value') as string);
+    if (resolvedType === 'schedule') {
+      baseData.schedule_day_of_week = parseInt(formData.get('schedule_day_of_week') as string, 10);
+      const st = (formData.get('schedule_time') as string) || '';
+      baseData.schedule_time = st.length === 5 ? `${st}:00` : st || undefined;
+      const mid = (formData.get('machine_id') as string)?.trim();
+      baseData.machine_id = mid || undefined;
+    } else if (resolvedType === 'counter') {
+      baseData.counter_trigger_value = parseInt(formData.get('counter_trigger_value') as string, 10);
       baseData.counter_reset_on_trigger = formData.get('counter_reset_on_trigger') === 'true';
-      baseData.machine_id = formData.get('machine_id') as string;
-    } else if (taskType === 'one_time') {
-      baseData.scheduled_date = formData.get('scheduled_date') as string;
-      baseData.scheduled_time = (formData.get('scheduled_time') as string) || undefined;
+      const mid = (formData.get('machine_id') as string)?.trim();
+      baseData.machine_id = mid || undefined;
+    } else if (resolvedType === 'one_time') {
+      baseData.scheduled_date = (formData.get('scheduled_date') as string) || undefined;
+      const st = (formData.get('scheduled_time') as string) || '';
+      baseData.scheduled_time = st ? (st.length === 5 ? `${st}:00` : st) : undefined;
       const repeatDays = formData.get('repeat_after_days') as string;
-      baseData.repeat_after_days = repeatDays ? parseInt(repeatDays) : undefined;
-      baseData.machine_id = (formData.get('machine_id') as string) || undefined;
+      baseData.repeat_after_days = repeatDays ? parseInt(repeatDays, 10) : undefined;
+      const mid = (formData.get('machine_id') as string)?.trim();
+      baseData.machine_id = mid || undefined;
     }
 
     if (editingTask) {
@@ -113,7 +144,7 @@ export const ProductionTasksPage = () => {
   };
 
   const tasks = tasksData?.items ?? [];
-  const machines = machinesData ?? [];
+  const machines = Array.isArray(machinesData) ? machinesData : [];
 
   const startEdit = (task: ProductionTask) => {
     setEditingTask(task);

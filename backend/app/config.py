@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # App
     DEBUG: bool = True
     SUPER_ADMIN_EMAIL: str = "admin@test.com"  # Only this user can create/edit/delete users
+    SCHEDULER_TIMEZONE: str = "Europe/Moscow"  # Timezone for production task scheduler
     
     @property
     def cors_origins_list(self) -> List[str]:

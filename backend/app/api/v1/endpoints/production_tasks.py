@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
@@ -20,7 +21,36 @@ from app.schemas.production_task import (
     ProductionTaskSnoozeRequest,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _task_to_response(task: ProductionTask) -> ProductionTaskResponse:
+    """Safely convert a SQLAlchemy ProductionTask to Pydantic response (no __dict__ leak)."""
+    return ProductionTaskResponse(
+        id=task.id,
+        user_id=task.user_id,
+        title=task.title,
+        description=task.description,
+        notification_text=task.notification_text,
+        task_type=task.task_type,
+        schedule_day_of_week=task.schedule_day_of_week,
+        schedule_time=task.schedule_time,
+        counter_trigger_value=task.counter_trigger_value,
+        counter_current_value=task.counter_current_value,
+        counter_reset_on_trigger=task.counter_reset_on_trigger,
+        machine_id=task.machine_id,
+        machine_name=task.machine.name if task.machine else None,
+        scheduled_date=task.scheduled_date,
+        scheduled_time=task.scheduled_time,
+        repeat_after_days=task.repeat_after_days,
+        is_active=task.is_active,
+        last_triggered_at=task.last_triggered_at,
+        last_triggered_roast_id=task.last_triggered_roast_id,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
 
 
 def _validate_task_create(data: ProductionTaskCreate) -> None:
@@ -50,216 +80,7 @@ def _validate_task_create(data: ProductionTaskCreate) -> None:
             )
 
 
-@router.get("", response_model=ProductionTaskListResponse)
-async def list_tasks(
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    task_type: Optional[str] = Query(None, pattern="^(schedule|counter|one_time)$"),
-    is_active: Optional[bool] = Query(None),
-    machine_id: Optional[UUID] = Query(None),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_full_access),
-):
-    """List production tasks with optional filters"""
-    query = select(ProductionTask).where(ProductionTask.user_id == current_user.id)
-    count_query = select(func.count()).select_from(ProductionTask).where(ProductionTask.user_id == current_user.id)
-    
-    if task_type:
-        query = query.where(ProductionTask.task_type == task_type)
-        count_query = count_query.where(ProductionTask.task_type == task_type)
-    if is_active is not None:
-        query = query.where(ProductionTask.is_active == is_active)
-        count_query = count_query.where(ProductionTask.is_active == is_active)
-    if machine_id:
-        query = query.where(ProductionTask.machine_id == machine_id)
-        count_query = count_query.where(ProductionTask.machine_id == machine_id)
-    
-    # Get total count
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-    
-    # Get items with machine relationship
-    query = query.options(selectinload(ProductionTask.machine))
-    query = query.order_by(ProductionTask.created_at.desc())
-    query = query.limit(limit).offset(offset)
-    
-    result = await db.execute(query)
-    tasks = result.scalars().all()
-    
-    items = []
-    for task in tasks:
-        task_dict = {
-            **task.__dict__,
-            "machine_name": task.machine.name if task.machine else None
-        }
-        items.append(ProductionTaskResponse(**task_dict))
-    
-    return ProductionTaskListResponse(items=items, total=total)
-
-
-@router.get("/{task_id}", response_model=ProductionTaskResponse)
-async def get_task(
-    task_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_full_access),
-):
-    """Get a single production task"""
-    query = select(ProductionTask).where(
-        and_(
-            ProductionTask.id == task_id,
-            ProductionTask.user_id == current_user.id
-        )
-    ).options(selectinload(ProductionTask.machine))
-    
-    result = await db.execute(query)
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found"
-        )
-    
-    task_dict = {
-        **task.__dict__,
-        "machine_name": task.machine.name if task.machine else None
-    }
-    return ProductionTaskResponse(**task_dict)
-
-
-@router.post("", response_model=ProductionTaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(
-    data: ProductionTaskCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_full_access),
-):
-    """Create a new production task"""
-    _validate_task_create(data)
-    
-    # Verify machine belongs to user if provided
-    if data.machine_id:
-        machine_query = select(UserMachine).where(
-            and_(
-                UserMachine.id == data.machine_id,
-                UserMachine.user_id == current_user.id
-            )
-        )
-        machine_result = await db.execute(machine_query)
-        machine = machine_result.scalar_one_or_none()
-        if not machine:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Machine not found"
-            )
-    
-    task = ProductionTask(
-        user_id=current_user.id,
-        title=data.title,
-        description=data.description,
-        notification_text=data.notification_text,
-        task_type=data.task_type,
-        schedule_day_of_week=data.schedule_day_of_week,
-        schedule_time=data.schedule_time,
-        counter_trigger_value=data.counter_trigger_value,
-        counter_reset_on_trigger=data.counter_reset_on_trigger if data.counter_reset_on_trigger is not None else True,
-        machine_id=data.machine_id,
-        scheduled_date=data.scheduled_date,
-        scheduled_time=data.scheduled_time,
-        repeat_after_days=data.repeat_after_days,
-        is_active=data.is_active,
-    )
-    
-    db.add(task)
-    await db.commit()
-    await db.refresh(task, ["machine"])
-    
-    task_dict = {
-        **task.__dict__,
-        "machine_name": task.machine.name if task.machine else None
-    }
-    return ProductionTaskResponse(**task_dict)
-
-
-@router.put("/{task_id}", response_model=ProductionTaskResponse)
-async def update_task(
-    task_id: UUID,
-    data: ProductionTaskUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_full_access),
-):
-    """Update a production task"""
-    query = select(ProductionTask).where(
-        and_(
-            ProductionTask.id == task_id,
-            ProductionTask.user_id == current_user.id
-        )
-    )
-    result = await db.execute(query)
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found"
-        )
-    
-    # Verify machine belongs to user if provided
-    if data.machine_id:
-        machine_query = select(UserMachine).where(
-            and_(
-                UserMachine.id == data.machine_id,
-                UserMachine.user_id == current_user.id
-            )
-        )
-        machine_result = await db.execute(machine_query)
-        machine = machine_result.scalar_one_or_none()
-        if not machine:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Machine not found"
-            )
-    
-    # Update fields
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(task, key, value)
-    
-    await db.commit()
-    await db.refresh(task, ["machine"])
-    
-    task_dict = {
-        **task.__dict__,
-        "machine_name": task.machine.name if task.machine else None
-    }
-    return ProductionTaskResponse(**task_dict)
-
-
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(
-    task_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_full_access),
-):
-    """Delete a production task"""
-    query = select(ProductionTask).where(
-        and_(
-            ProductionTask.id == task_id,
-            ProductionTask.user_id == current_user.id
-        )
-    )
-    result = await db.execute(query)
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found"
-        )
-    
-    await db.delete(task)
-    await db.commit()
-    return None
-
+# ──────────────── HISTORY routes FIRST (before /{task_id}) ────────────────
 
 @router.get("/history/list", response_model=ProductionTaskHistoryListResponse)
 async def list_history(
@@ -276,7 +97,7 @@ async def list_history(
     count_query = select(func.count()).select_from(ProductionTaskHistory).where(
         ProductionTaskHistory.user_id == current_user.id
     )
-    
+
     if task_id:
         query = query.where(ProductionTaskHistory.task_id == task_id)
         count_query = count_query.where(ProductionTaskHistory.task_id == task_id)
@@ -286,17 +107,17 @@ async def list_history(
     if completed_only:
         query = query.where(ProductionTaskHistory.marked_completed_at.isnot(None))
         count_query = count_query.where(ProductionTaskHistory.marked_completed_at.isnot(None))
-    
+
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    
+
     query = query.order_by(ProductionTaskHistory.triggered_at.desc())
     query = query.limit(limit).offset(offset)
-    
+
     result = await db.execute(query)
     history_items = result.scalars().all()
-    
-    items = [ProductionTaskHistoryResponse(**item.__dict__) for item in history_items]
+
+    items = [ProductionTaskHistoryResponse.model_validate(item) for item in history_items]
     return ProductionTaskHistoryListResponse(items=items, total=total)
 
 
@@ -315,26 +136,26 @@ async def mark_completed(
     )
     result = await db.execute(query)
     history_item = result.scalar_one_or_none()
-    
+
     if not history_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="History item not found"
         )
-    
+
     if history_item.marked_completed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Already marked as completed"
         )
-    
+
     history_item.marked_completed_at = datetime.utcnow()
     history_item.marked_completed_by_user_id = current_user.id
-    
+
     await db.commit()
     await db.refresh(history_item)
-    
-    return ProductionTaskHistoryResponse(**history_item.__dict__)
+
+    return ProductionTaskHistoryResponse.model_validate(history_item)
 
 
 @router.post("/history/{history_id}/snooze", response_model=ProductionTaskHistoryResponse)
@@ -353,23 +174,234 @@ async def snooze_task(
     )
     result = await db.execute(query)
     history_item = result.scalar_one_or_none()
-    
+
     if not history_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="History item not found"
         )
-    
+
     if data.snooze_until <= datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Snooze time must be in the future"
         )
-    
+
     history_item.snoozed_until = data.snooze_until
     history_item.snoozed_by_user_id = current_user.id
-    
+
     await db.commit()
     await db.refresh(history_item)
-    
-    return ProductionTaskHistoryResponse(**history_item.__dict__)
+
+    return ProductionTaskHistoryResponse.model_validate(history_item)
+
+
+# ──────────────── TASK CRUD routes ────────────────
+
+@router.get("", response_model=ProductionTaskListResponse)
+async def list_tasks(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    task_type: Optional[str] = Query(None, pattern="^(schedule|counter|one_time)$"),
+    is_active: Optional[bool] = Query(None),
+    machine_id: Optional[UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """List production tasks with optional filters"""
+    query = select(ProductionTask).where(ProductionTask.user_id == current_user.id)
+    count_query = select(func.count()).select_from(ProductionTask).where(ProductionTask.user_id == current_user.id)
+
+    if task_type:
+        query = query.where(ProductionTask.task_type == task_type)
+        count_query = count_query.where(ProductionTask.task_type == task_type)
+    if is_active is not None:
+        query = query.where(ProductionTask.is_active == is_active)
+        count_query = count_query.where(ProductionTask.is_active == is_active)
+    if machine_id:
+        query = query.where(ProductionTask.machine_id == machine_id)
+        count_query = count_query.where(ProductionTask.machine_id == machine_id)
+
+    # Get total count
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Get items with machine relationship
+    query = query.options(selectinload(ProductionTask.machine))
+    query = query.order_by(ProductionTask.created_at.desc())
+    query = query.limit(limit).offset(offset)
+
+    result = await db.execute(query)
+    tasks = result.scalars().all()
+
+    items = [_task_to_response(task) for task in tasks]
+    return ProductionTaskListResponse(items=items, total=total)
+
+
+@router.get("/{task_id}", response_model=ProductionTaskResponse)
+async def get_task(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """Get a single production task"""
+    query = select(ProductionTask).where(
+        and_(
+            ProductionTask.id == task_id,
+            ProductionTask.user_id == current_user.id
+        )
+    ).options(selectinload(ProductionTask.machine))
+
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    return _task_to_response(task)
+
+
+@router.post("", response_model=ProductionTaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_task(
+    data: ProductionTaskCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """Create a new production task"""
+    _validate_task_create(data)
+
+    # Verify machine belongs to user if provided
+    if data.machine_id:
+        machine_query = select(UserMachine).where(
+            and_(
+                UserMachine.id == data.machine_id,
+                UserMachine.user_id == current_user.id
+            )
+        )
+        machine_result = await db.execute(machine_query)
+        machine = machine_result.scalar_one_or_none()
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Machine not found"
+            )
+
+    task = ProductionTask(
+        user_id=current_user.id,
+        title=data.title,
+        description=data.description,
+        notification_text=data.notification_text,
+        task_type=data.task_type,
+        schedule_day_of_week=data.schedule_day_of_week,
+        schedule_time=data.schedule_time,
+        counter_trigger_value=data.counter_trigger_value,
+        counter_reset_on_trigger=data.counter_reset_on_trigger if data.counter_reset_on_trigger is not None else True,
+        machine_id=data.machine_id,
+        scheduled_date=data.scheduled_date,
+        scheduled_time=data.scheduled_time,
+        repeat_after_days=data.repeat_after_days,
+        is_active=data.is_active,
+    )
+
+    db.add(task)
+    await db.commit()
+
+    # Re-fetch the task with machine relationship loaded (avoids __dict__ issues)
+    fresh_query = (
+        select(ProductionTask)
+        .where(ProductionTask.id == task.id)
+        .options(selectinload(ProductionTask.machine))
+    )
+    fresh_result = await db.execute(fresh_query)
+    task = fresh_result.scalar_one()
+
+    logger.info("Created production task %s (%s) for user %s", task.id, task.task_type, current_user.id)
+    return _task_to_response(task)
+
+
+@router.put("/{task_id}", response_model=ProductionTaskResponse)
+async def update_task(
+    task_id: UUID,
+    data: ProductionTaskUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """Update a production task"""
+    query = select(ProductionTask).where(
+        and_(
+            ProductionTask.id == task_id,
+            ProductionTask.user_id == current_user.id
+        )
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    # Verify machine belongs to user if provided
+    if data.machine_id:
+        machine_query = select(UserMachine).where(
+            and_(
+                UserMachine.id == data.machine_id,
+                UserMachine.user_id == current_user.id
+            )
+        )
+        machine_result = await db.execute(machine_query)
+        machine = machine_result.scalar_one_or_none()
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Machine not found"
+            )
+
+    # Update fields
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(task, key, value)
+
+    await db.commit()
+
+    # Re-fetch with machine relationship
+    fresh_query = (
+        select(ProductionTask)
+        .where(ProductionTask.id == task.id)
+        .options(selectinload(ProductionTask.machine))
+    )
+    fresh_result = await db.execute(fresh_query)
+    task = fresh_result.scalar_one()
+
+    return _task_to_response(task)
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_full_access),
+):
+    """Delete a production task"""
+    query = select(ProductionTask).where(
+        and_(
+            ProductionTask.id == task_id,
+            ProductionTask.user_id == current_user.id
+        )
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    await db.delete(task)
+    await db.commit()
+    return None

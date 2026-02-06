@@ -105,6 +105,8 @@ export interface Roast {
   
   // HR IDs (Artisan string identifiers)
   coffee_hr_id?: string;
+  /** Green bean label from Artisan profile or inventory (for list display) */
+  coffee_label?: string;
   blend_hr_id?: string;
   location_hr_id?: string;
   blend_spec?: BlendSpec;
@@ -207,6 +209,8 @@ export interface Schedule {
   scheduled_weight_kg?: number;
   coffee_id?: string;
   batch_id?: string;
+  machine_id?: string;
+  roast_target?: string; // filter, omni, espresso
   status: 'pending' | 'completed' | 'cancelled';
   completed_at?: string;
   notes?: string;

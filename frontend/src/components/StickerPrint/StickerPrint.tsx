@@ -15,9 +15,12 @@ function getGoalLabel(goalsStatus?: 'green' | 'yellow' | 'red'): string | null {
   return null;
 }
 
+/** Номер батча из Artisan; при отсутствии — номер обжарки с сайта */
 function getBatchNumberArtisan(roast: Roast): string {
   const n = roast.batch_number;
   if (n != null && n > 0) return String(n);
+  const seq = roast.roast_seq;
+  if (seq != null && seq > 0) return `#${seq}`;
   return '—';
 }
 
@@ -59,6 +62,7 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
         return;
       }
 
+      const logoUrl = `${baseUrl}/загруженное.png`;
       const stickersHtml = roasts
         .map((roast) => {
           const batchArtisan = getBatchNumberArtisan(roast);
@@ -72,9 +76,12 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
           return `
         <div class="sticker">
           <div class="sticker__inner">
+            <div class="sticker__logo-wrap">
+              <img src="${logoUrl}" class="sticker__logo" alt="QQ Coffee" />
+            </div>
             <div class="sticker__meta">
-              <span class="sticker__meta-item"><span class="sticker__label">Батч Artisan</span> ${escapeHtml(batchArtisan)}</span>
-              <span class="sticker__meta-item"><span class="sticker__label">Обжарка</span> ${escapeHtml(roastSite)}</span>
+              <div class="sticker__meta-row"><span class="sticker__label">Батч Artisan</span> <span class="sticker__meta-val">${escapeHtml(batchArtisan)}</span></div>
+              <div class="sticker__meta-row"><span class="sticker__label">Обжарка</span> <span class="sticker__meta-val">${escapeHtml(roastSite)}</span></div>
             </div>
             <div class="sticker__divider"></div>
             <div class="sticker__body">
@@ -129,14 +136,14 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
       }
       .sticker:last-child { page-break-after: auto !important; break-after: auto !important; }
       .sticker * { page-break-inside: avoid !important; break-inside: avoid !important; }
-      .sticker__inner, .sticker__body, .sticker__text, .sticker__meta, .sticker__footer, .sticker__qr-wrap { display: flex !important; }
+      .sticker__inner, .sticker__body, .sticker__text, .sticker__meta, .sticker__footer, .sticker__qr-wrap, .sticker__logo-wrap { display: flex !important; }
       .sticker__qr { width: 44px !important; height: 44px !important; }
       .sticker__qr img { width: 44px !important; height: 44px !important; image-rendering: crisp-edges !important; }
     }
     
     html, body {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 10px;
+      font-size: 12px;
       color: #000;
       background: #fff;
       margin: 0;
@@ -166,36 +173,72 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
       flex-direction: column;
       width: 100%;
       height: 100%;
-      padding: 1.8mm;
+      padding: 1.2mm;
       gap: 0;
+    }
+    
+    .sticker__logo-wrap {
+      flex-shrink: 0;
+      background: #1a1a1a;
+      border-radius: 1mm;
+      padding: 0.6mm 1.2mm;
+      align-items: center;
+      justify-content: flex-start;
+      margin-bottom: 0.8mm;
+    }
+    
+    .sticker__logo {
+      height: 6.5mm;
+      width: auto;
+      max-width: 24mm;
+      object-fit: contain;
+      object-position: left center;
+      display: block;
+      vertical-align: middle;
     }
     
     .sticker__meta {
       display: flex;
-      flex-direction: row;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 6.5pt;
+      flex-direction: column;
+      flex-shrink: 0;
+      font-size: 8pt;
       line-height: 1.35;
-      color: #333;
+      color: #000;
       letter-spacing: 0.02em;
-      padding-bottom: 1mm;
+      padding-bottom: 0.5mm;
+      gap: 0.3mm;
+    }
+    
+    .sticker__meta-row {
+      display: flex;
+      align-items: baseline;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
     
     .sticker__label {
       font-weight: 600;
       color: #000;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       margin-right: 0.5mm;
+      flex-shrink: 0;
     }
     
-    .sticker__meta-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%; }
+    .sticker__meta-val {
+      font-weight: 600;
+      color: #000;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
     
     .sticker__divider {
-      height: 0.25mm;
+      height: 0.3mm;
       background: #000;
-      margin-bottom: 1.2mm;
+      margin-bottom: 1mm;
       flex-shrink: 0;
     }
     
@@ -219,7 +262,7 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
     }
     
     .sticker__title {
-      font-size: 9.5pt;
+      font-size: 13pt;
       font-weight: 700;
       line-height: 1.2;
       color: #000;
@@ -228,7 +271,7 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
-      margin-bottom: 1mm;
+      margin-bottom: 0.8mm;
       letter-spacing: 0.01em;
     }
     
@@ -237,7 +280,7 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
       flex-direction: row;
       justify-content: space-between;
       align-items: center;
-      font-size: 7pt;
+      font-size: 9pt;
       line-height: 1.3;
       color: #333;
       margin-top: auto;
@@ -248,10 +291,10 @@ export function StickerPrint({ roasts, baseUrl, onClose }: StickerPrintProps) {
     .sticker__goal {
       font-weight: 700;
       color: #000;
-      padding: 0.4mm 1.2mm;
+      padding: 0.5mm 1.4mm;
       border: 0.25mm solid #000;
       border-radius: 0.5mm;
-      font-size: 6.5pt;
+      font-size: 8.5pt;
       letter-spacing: 0.03em;
     }
     

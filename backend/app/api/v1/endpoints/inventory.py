@@ -77,16 +77,23 @@ async def get_stock_artisan(
         )
         .order_by(Schedule.scheduled_date.asc())
     )
+    ROAST_TARGET_LABELS = {"filter": "фильтр", "omni": "омни", "espresso": "эспрессо"}
     schedule_rows = schedule_result.all()
     schedule: list[dict[str, Any]] = []
     for row in schedule_rows:
         s, coffee_hr_id = row[0], row[1]
         if not coffee_hr_id:
             continue
+        base_title = (s.title or "").strip()
+        if getattr(s, "roast_target", None) and s.roast_target in ROAST_TARGET_LABELS:
+            label = ROAST_TARGET_LABELS.get(s.roast_target, s.roast_target)
+            title = f"{base_title} ({label})" if base_title else label
+        else:
+            title = base_title
         schedule.append({
             "_id": str(s.id),
             "date": s.scheduled_date.isoformat() if s.scheduled_date else "",
-            "title": s.title or "",
+            "title": title,
             "amount": float(s.scheduled_weight_kg) if s.scheduled_weight_kg is not None else 0.0,
             "coffee": coffee_hr_id,
             "location": "default",  # Required by Artisan; matches stock location_hr_id

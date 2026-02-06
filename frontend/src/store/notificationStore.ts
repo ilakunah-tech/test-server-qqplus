@@ -18,6 +18,7 @@ export interface ProductionTaskNotification {
   machine_name?: string;
   triggered_at: string;
   trigger_reason?: string;
+  is_reminder?: boolean;
 }
 
 interface NotificationState {
@@ -42,10 +43,11 @@ export const notificationStore = create<NotificationState>((set) => ({
         const payload = notification.payload as ProductionTaskNotification;
         if (Notification.permission === 'granted') {
           const machineText = payload.machine_name ? ` (${payload.machine_name})` : '';
-          new Notification(payload.title, {
+          const reminderPrefix = payload.is_reminder ? '🔔 Напоминание: ' : '';
+          new Notification(reminderPrefix + payload.title, {
             body: payload.notification_text + machineText,
             icon: '/vite.svg',
-            tag: payload.history_id, // Prevent duplicate notifications
+            tag: `${payload.history_id}-${Date.now()}`, // Unique tag so reminders always show
             requireInteraction: false,
           });
         }

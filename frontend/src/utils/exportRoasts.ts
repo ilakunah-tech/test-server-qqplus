@@ -37,7 +37,7 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
   }},
   { id: 'bean_color', label: 'Цвет зерна', getValue: (r) => r.whole_color != null && r.whole_color !== 0 ? String(r.whole_color) : '—' },
   { id: 'grind_color', label: 'Цвет помола', getValue: (r) => r.ground_color != null && r.ground_color !== 0 ? String(r.ground_color) : '—' },
-  { id: 'coffee', label: 'Кофе', getValue: (r) => r.coffee_hr_id ?? r.blend_spec?.label ?? r.blend_hr_id ?? '—' },
+  { id: 'coffee', label: 'Кофе', getValue: (r) => r.coffee_label ?? r.blend_spec?.label ?? r.coffee_hr_id ?? r.blend_hr_id ?? '—' },
   { id: 'rating', label: 'Оценка', getValue: (r) => r.cupping_score != null && r.cupping_score > 0 ? String(r.cupping_score) : '—' },
   { id: 'quality_control', label: 'Контроль качества', getValue: (r) => r.notes ?? '—' },
 ];

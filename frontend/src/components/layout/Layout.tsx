@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { NotificationToast } from '@/components/NotificationToast';
 import { authStore } from '@/store/authStore';
 import { authApi } from '@/api/auth';
 
@@ -29,6 +30,7 @@ export const Layout = ({ children }: LayoutProps) => {
       
       <div className="relative">
         <Header sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
+        <NotificationToast />
         <div className="flex min-w-0 flex-1">
           <Sidebar open={sidebarOpen} />
           <main className="relative min-w-0 flex-1 overflow-x-hidden p-6 lg:p-8">
