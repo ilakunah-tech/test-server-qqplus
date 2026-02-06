@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, require_full_access
 from app.models.user import User
 from app.models.blend import Blend
 from app.models.coffee import Coffee
@@ -59,7 +59,7 @@ async def list_blends(
     limit: int = Query(100, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Список блендов текущего пользователя с available_weight_kg и обогащённым recipe."""
     count_result = await db.execute(
@@ -90,7 +90,7 @@ async def list_blends(
 async def create_blend(
     blend_data: BlendCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Создать бленд. Валидация: все coffee_id существуют."""
     for comp in blend_data.recipe:
@@ -125,7 +125,7 @@ async def create_blend(
 async def get_blend(
     blend_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Детали бленда по ID. 403 если не владелец."""
     result = await db.execute(select(Blend).where(Blend.id == blend_id))
@@ -144,7 +144,7 @@ async def update_blend(
     blend_id: UUID,
     blend_data: BlendUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Обновить бленд. При обновлении recipe валидируем coffee_id."""
     result = await db.execute(select(Blend).where(Blend.id == blend_id))
@@ -186,7 +186,7 @@ async def update_blend(
 async def delete_blend(
     blend_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Удалить бленд. 400 если есть roasts с этим blend_id."""
     result = await db.execute(select(Blend).where(Blend.id == blend_id))

@@ -2,52 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/* QQ COFFEE — переменные для светлой и тёмной темы */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --border: 0 0% 89.8%;
-    --primary: 283 72% 36%;
+    --background: 30 25% 99%;
+    --foreground: 24 10% 10%;
+    --border: 24 15% 88%;
+    --primary: 24 95% 47%;
     --primary-foreground: 0 0% 100%;
+    --card-bg: 0 0% 100%;
+    --card-border: 24 15% 90%;
+    --accent-glow: 45 100% 50%;
   }
 
   html.light,
   html:not(.dark) {
-    @apply bg-white;
+    background-color: #fffbf7;
   }
 
   html.dark {
-    @apply bg-gray-900;
+    background-color: #0f172a;
   }
 
   .dark {
-    --background: 0 0% 9%;
-    --foreground: 0 0% 98%;
-    --border: 0 0% 20%;
+    --background: 222 47% 11%;
+    --foreground: 0 0% 96%;
+    --border: 220 13% 24%;
+    --card-bg: 220 26% 14%;
+    --card-border: 45 80% 55% / 0.25;
+    --accent-glow: 45 100% 55%;
   }
 
   body {
     font-family: 'Rubik', Arial, sans-serif;
-    @apply bg-white text-gray-900;
+    @apply bg-[#fffbf7] text-gray-900;
   }
 
   html.dark body {
-    @apply bg-gray-900 text-gray-100;
+    @apply bg-slate-900 text-gray-100;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #E85D04 0%, #F48C06 100%);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #D45103 0%, #E85D04 100%);
+  }
+  html.dark ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  html.dark ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #FFB627 0%, #E85D04 100%);
+  }
+
+  /* Текст в шапке на тёмном фоне — всегда читаемый */
+  header button,
+  header [class*="text-white"] {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   }
 }
 
-/* Светлая тема — вне @layer для максимального приоритета над Tailwind dark: */
+/* Светлая тема QQ COFFEE — тёплые тона, огненные акценты */
 html[data-theme="light"] body,
 html.light body {
-  background-color: #ffffff !important;
-  color: #111827 !important;
+  background-color: #fffbf7 !important;
+  color: #1c1917 !important;
 }
 
 html[data-theme="light"] .min-h-screen,
 html.light .min-h-screen,
 html[data-theme="light"] main,
 html.light main {
-  background-color: #faf5fc !important;
+  background-color: #fffbf7 !important;
 }
 
 html[data-theme="light"] header,
@@ -55,23 +96,24 @@ html.light header,
 html[data-theme="light"] aside,
 html.light aside {
   background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
+  border-color: #f5e6dc !important;
 }
 
 html[data-theme="light"] div[class*="rounded-card"],
 html.light div[class*="rounded-card"] {
   background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
+  border-color: #f5e6dc !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(232,93,4,0.06) !important;
 }
 
-html[data-theme="light"] a:not([class*="bg-brand"]),
-html.light a:not([class*="bg-brand"]) {
-  color: #374151 !important;
+html[data-theme="light"] a:not([class*="bg-brand"]):not([class*="bg-qq-"]),
+html.light a:not([class*="bg-brand"]):not([class*="bg-qq-"]) {
+  color: #44403c !important;
 }
 
-html[data-theme="light"] a:hover:not([class*="bg-brand"]),
-html.light a:hover:not([class*="bg-brand"]) {
-  background-color: #f3f4f6 !important;
+html[data-theme="light"] a:hover:not([class*="bg-brand"]):not([class*="bg-qq-"]),
+html.light a:hover:not([class*="bg-brand"]):not([class*="bg-qq-"]) {
+  background-color: #fff7ed !important;
 }
 
 html[data-theme="light"] h1,
@@ -80,10 +122,10 @@ html[data-theme="light"] h3,
 html.light h1,
 html.light h2,
 html.light h3 {
-  color: #111827 !important;
+  color: #1c1917 !important;
 }
 
-/* Шапка QC — светлый текст на тёмно-фиолетовом фоне (исключение из светлой темы) */
+/* Шапка QC — светлый текст на тёмном фоне (исключение из светлой темы) */
 html[data-theme="light"] .qc-page-header h1,
 html[data-theme="light"] .qc-page-header h2,
 html[data-theme="light"] .qc-page-header h3,
@@ -97,16 +139,16 @@ html.light .qc-page-header .qc-page-header-desc {
   color: rgba(255, 255, 255, 0.95) !important;
 }
 
-html[data-theme="light"] button:not([class*="bg-brand"]):not(.verdict-dot),
-html.light button:not([class*="bg-brand"]):not(.verdict-dot) {
-  color: #374151 !important;
+html[data-theme="light"] button:not([class*="bg-brand"]):not([class*="bg-qq-"]):not(.verdict-dot),
+html.light button:not([class*="bg-brand"]):not([class*="bg-qq-"]):not(.verdict-dot) {
+  color: #44403c !important;
   background-color: #ffffff !important;
-  border-color: #d1d5db !important;
+  border-color: #e7e5e4 !important;
 }
 
 /* Кнопки в шапке QC — светлый текст на тёмном фоне */
-html[data-theme="light"] .qc-page-header button:not([class*="bg-qq-yellow"]),
-html.light .qc-page-header button:not([class*="bg-qq-yellow"]) {
+html[data-theme="light"] .qc-page-header button:not([class*="bg-qq-yellow"]):not([class*="bg-brand"]),
+html.light .qc-page-header button:not([class*="bg-qq-yellow"]):not([class*="bg-brand"]) {
   color: rgba(255, 255, 255, 0.9) !important;
   background-color: transparent !important;
   border-color: transparent !important;
@@ -126,8 +168,8 @@ html.light input[type="password"],
 html.light input[type="number"],
 html.light input:not([type]) {
   background-color: #ffffff !important;
-  color: #111827 !important;
-  border-color: #d1d5db !important;
+  color: #1c1917 !important;
+  border-color: #e7e5e4 !important;
 }
 
 /* Card в светлой теме */
@@ -145,16 +187,45 @@ html[data-theme="light"] p:not(svg p),
 html.light p:not(svg p),
 html[data-theme="light"] span:not(svg span):not(.recharts-text):not([class*="plotly"]),
 html.light span:not(svg span):not(.recharts-text):not([class*="plotly"]) {
-  color: #374151 !important;
+  color: #44403c !important;
 }
 
-/* Кнопка с bg-brand сохраняет белый текст */
+/* Dashboard hero — принудительно белый текст на тёмном фоне (перебивает все !important) */
+#dashboard-hero,
+#dashboard-hero span,
+#dashboard-hero p,
+#dashboard-hero div,
+#dashboard-hero label {
+  color: #ffffff !important;
+}
+#dashboard-hero .hero-muted {
+  opacity: 0.7;
+}
+#dashboard-hero .hero-soft {
+  opacity: 0.9;
+}
+#dashboard-hero .hero-dim {
+  opacity: 0.6;
+}
+#dashboard-hero .hero-icon-orange { color: #fdba74 !important; }
+#dashboard-hero .hero-icon-cyan { color: #67e8f9 !important; }
+#dashboard-hero .hero-icon-green { color: #6ee7b7 !important; }
+
+/* Кнопки с bg-brand / bg-qq- сохраняют белый текст */
 html[data-theme="light"] button[class*="bg-brand"],
-html.light button[class*="bg-brand"] {
+html.light button[class*="bg-brand"],
+html[data-theme="light"] button[class*="bg-qq-"],
+html.light button[class*="bg-qq-"] {
   color: #ffffff !important;
 }
 
-/* ========== Dark theme: светлый текст на тёмном фоне ========== */
+/* Кнопка destructive (Удалить) — красная, белый текст */
+html[data-theme="light"] button[class*="bg-qq-destructive"],
+html.light button[class*="bg-qq-destructive"] {
+  color: #ffffff !important;
+}
+
+/* ========== Тёмная тема QQ COFFEE: charcoal, светлый текст, тёплое свечение ========== */
 html.dark h1,
 html.dark h2,
 html.dark h3,
@@ -172,6 +243,11 @@ html[data-theme="dark"] main,
 html[data-theme="dark"] .min-h-screen {
   background-color: #111827 !important;
   color: #f3f4f6 !important;
+}
+
+html.dark [class*="rounded-card"],
+html[data-theme="dark"] [class*="rounded-card"] {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,234,0,0.08) !important;
 }
 
 html.dark [class*="CardTitle"]:not([class*="text-"]),
@@ -229,6 +305,7 @@ html.dark [class*="rounded-card"]:not([class*="from-qq"]):not([class*="bg-qq"]),
 html[data-theme="dark"] table,
 html[data-theme="dark"] [class*="rounded-card"]:not([class*="from-qq"]):not([class*="bg-qq"]) {
   background-color: #1f2937 !important;
+  border-color: rgba(255, 234, 0, 0.12) !important;
 }
 
 /* Input и Select в тёмной теме */
@@ -277,7 +354,8 @@ svg.main-svg tspan {
   writing-mode: horizontal-tb !important;
 }
 
-/* QC Statistics animations */
+/* ========== Premium Animations & Effects ========== */
+
 @keyframes fade-in-up {
   0% {
     opacity: 0;
@@ -288,6 +366,7 @@ svg.main-svg tspan {
     transform: translateY(0);
   }
 }
+
 @keyframes number-count {
   0% {
     opacity: 0;
@@ -297,4 +376,329 @@ svg.main-svg tspan {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(232, 93, 4, 0.3), 0 0 40px rgba(255, 182, 39, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(232, 93, 4, 0.5), 0 0 60px rgba(255, 182, 39, 0.2);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Glassmorphism utilities */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 234, 0, 0.1);
+  }
+
+  .glass-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 251, 247, 0.8) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(232, 93, 4, 0.08);
+    box-shadow: 
+      0 4px 24px rgba(0, 0, 0, 0.06),
+      0 1px 2px rgba(232, 93, 4, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  html.dark .glass-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.85) 100%);
+    border: 1px solid rgba(255, 234, 0, 0.1);
+    box-shadow: 
+      0 4px 24px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 234, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, #FFEA00 0%, #E85D04 50%, #6A1A9C 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease infinite;
+  }
+
+  /* Hover glow effect */
+  .hover-glow {
+    transition: all 0.3s ease;
+  }
+  .hover-glow:hover {
+    box-shadow: 
+      0 8px 32px rgba(232, 93, 4, 0.2),
+      0 0 0 1px rgba(232, 93, 4, 0.1);
+    transform: translateY(-2px);
+  }
+
+  html.dark .hover-glow:hover {
+    box-shadow: 
+      0 8px 32px rgba(255, 234, 0, 0.15),
+      0 0 24px rgba(232, 93, 4, 0.1),
+      0 0 0 1px rgba(255, 234, 0, 0.15);
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    background: linear-gradient(135deg, #E85D04 0%, #FFB627 50%, #FFEA00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Subtle pattern background */
+  .pattern-dots {
+    background-image: radial-gradient(rgba(232, 93, 4, 0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  html.dark .pattern-dots {
+    background-image: radial-gradient(rgba(255, 234, 0, 0.06) 1px, transparent 1px);
+  }
+
+  /* Warm gradient backgrounds */
+  .bg-warm-gradient {
+    background: linear-gradient(135deg, #fffbf7 0%, #fff7ed 50%, #fffbf7 100%);
+  }
+
+  html.dark .bg-warm-gradient {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  }
+}
+
+/* Premium card styles */
+.premium-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 251, 247, 0.9) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(232, 93, 4, 0.1);
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.05),
+    0 8px 32px rgba(232, 93, 4, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.premium-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #FFEA00, #FFB627, #E85D04, #6A1A9C);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.premium-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.08),
+    0 16px 56px rgba(232, 93, 4, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.premium-card:hover::before {
+  opacity: 1;
+}
+
+html.dark .premium-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(255, 234, 0, 0.1);
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 234, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+html.dark .premium-card:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(255, 234, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* KPI stat card */
+.kpi-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255, 234, 0, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+html.dark .kpi-card::after {
+  background: radial-gradient(circle, rgba(255, 234, 0, 0.05) 0%, transparent 70%);
+}
+
+/* Icon container with gradient bg */
+.icon-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  transition: all 0.3s ease;
+}
+
+.icon-badge::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, currentColor, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.3;
+}
+
+/* Sidebar link styles */
+.sidebar-link {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: linear-gradient(180deg, #FFEA00, #E85D04);
+  border-radius: 0 4px 4px 0;
+  transition: height 0.3s ease;
+}
+
+.sidebar-link:hover::before,
+.sidebar-link.active::before {
+  height: 60%;
+}
+
+.sidebar-link.active::before {
+  height: 80%;
+}
+
+/* Empty state illustration */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(232, 93, 4, 0.1) 0%, rgba(255, 182, 39, 0.1) 100%);
+  margin-bottom: 1.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+html.dark .empty-state-icon {
+  background: linear-gradient(135deg, rgba(255, 234, 0, 0.1) 0%, rgba(232, 93, 4, 0.1) 100%);
+}
+
+/* Section divider with gradient */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(232, 93, 4, 0.2), transparent);
+}
+
+html.dark .section-divider {
+  background: linear-gradient(90deg, transparent, rgba(255, 234, 0, 0.15), transparent);
 }

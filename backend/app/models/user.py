@@ -8,6 +8,8 @@ from app.db.base import Base
 # Role names stored in DB (use string for simplicity and future roles)
 USER_ROLE_USER = "user"
 USER_ROLE_ADMIN = "admin"
+USER_ROLE_QC = "qc"
+USER_ROLE_SM = "sm"
 
 
 class User(Base):

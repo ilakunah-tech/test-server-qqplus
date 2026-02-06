@@ -3,7 +3,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Literal, Optional
 
-UserRole = Literal["user", "admin"]
+UserRole = Literal["user", "admin", "qc", "sm"]
 
 
 class UserBase(BaseModel):
@@ -55,6 +55,12 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
     remember: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change own password: current + new."""
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=72)
 
 
 class RegisterRequest(BaseModel):

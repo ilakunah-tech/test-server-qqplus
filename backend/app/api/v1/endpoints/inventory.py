@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from uuid import UUID
 from typing import Optional, Any
 from datetime import datetime, timezone, date
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, require_full_access
 from app.models.user import User
 from app.models.coffee import Coffee
 from app.models.batch import Batch
@@ -29,7 +29,7 @@ async def get_stock_artisan(
     today: Optional[str] = Query(None),
     lsrt: Optional[float] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """
     Artisan-compatible stock: returns coffees, batches, schedule in the format
@@ -154,7 +154,7 @@ async def list_coffees(
     limit: int = Query(1000, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """List all coffees."""
     count_result = await db.execute(select(func.count()).select_from(Coffee))
@@ -180,7 +180,7 @@ async def list_coffees(
 async def create_coffee(
     coffee_data: CoffeeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Create a new coffee."""
     # Generate hr_id
@@ -217,7 +217,7 @@ async def create_coffee(
 async def get_coffee(
     coffee_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Get a coffee by ID."""
     result = await db.execute(select(Coffee).where(Coffee.id == coffee_id))
@@ -233,7 +233,7 @@ async def update_coffee(
     coffee_id: UUID,
     coffee_data: CoffeeUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Update a coffee by ID."""
     result = await db.execute(select(Coffee).where(Coffee.id == coffee_id))
@@ -255,7 +255,7 @@ async def add_coffee_stock(
     coffee_id: UUID,
     body: AddStockRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Add green bean stock (приход) when coffee arrives at warehouse."""
     result = await db.execute(select(Coffee).where(Coffee.id == coffee_id).with_for_update())
@@ -273,7 +273,7 @@ async def add_coffee_stock(
 async def delete_coffee(
     coffee_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Delete a coffee by ID."""
     result = await db.execute(select(Coffee).where(Coffee.id == coffee_id))
@@ -303,7 +303,7 @@ async def list_batches(
     limit: int = Query(100, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """List batches with optional filters (coffee_id, status)."""
     query = select(Batch)
@@ -333,7 +333,7 @@ async def list_batches(
 async def create_batch(
     batch_data: BatchCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Create a new batch."""
     # Verify coffee exists
@@ -364,7 +364,7 @@ async def create_batch(
 async def get_batch(
     batch_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Get a single batch by ID."""
     result = await db.execute(select(Batch).where(Batch.id == batch_id))
@@ -379,7 +379,7 @@ async def update_batch(
     batch_id: UUID,
     batch_data: BatchUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Update a batch by ID."""
     result = await db.execute(select(Batch).where(Batch.id == batch_id))
@@ -401,7 +401,7 @@ async def deduct_batch_weight(
     batch_id: UUID,
     deduct_data: BatchDeductRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """
     Atomically deduct weight from batch (with SELECT FOR UPDATE).
@@ -435,7 +435,7 @@ async def deduct_batch_weight(
 async def delete_batch(
     batch_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Delete a batch by ID."""
     result = await db.execute(select(Batch).where(Batch.id == batch_id))

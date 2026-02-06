@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import timedelta
 from uuid import UUID
-from app.api.deps import get_db, get_current_user, require_admin
-from app.models.user import User, USER_ROLE_USER
-from app.schemas.user import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdateRole, UserUpdate, UserCreateAdmin
+from app.api.deps import get_db, get_current_user, require_super_admin
+from app.models.user import User
+from app.schemas.user import LoginRequest, TokenResponse, UserResponse, UserUpdateRole, UserUpdate, UserCreateAdmin, ChangePasswordRequest
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.config import settings
 
@@ -18,6 +18,24 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return {
         "data": UserResponse.model_validate(current_user),
     }
+
+
+@router.patch("/me/password", response_model=dict)
+async def change_own_password(
+    body: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change password for the current user. Requires current password."""
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    current_user.hashed_password = get_password_hash(body.new_password)
+    await db.commit()
+    await db.refresh(current_user)
+    return {"data": {"message": "Password changed successfully"}}
 
 
 @router.post("/login", response_model=dict)
@@ -58,57 +76,6 @@ async def login(
     }
 
 
-@router.post("/register", response_model=dict)
-async def register(
-    user_data: RegisterRequest,
-    db: AsyncSession = Depends(get_db)
-) -> dict:
-    """Register a new user"""
-    
-    # Проверка существующего пользователя по email и username
-    result = await db.execute(
-        select(User).where(
-            (User.email == user_data.email) | (User.username == user_data.username)
-        )
-    )
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
-        if existing_user.email == user_data.email:
-            raise HTTPException(status_code=400, detail="User with this email already exists")
-        raise HTTPException(status_code=400, detail="User with this username already exists")
-
-    # Создание нового пользователя (роль по умолчанию — user)
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        username=user_data.username.strip(),
-        email=user_data.email,
-        hashed_password=hashed_password,
-        is_active=True,
-        role=USER_ROLE_USER,
-    )
-    
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-    
-    # Создание токена
-    expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(new_user.id)},
-        expires_delta=expires_delta,
-    )
-    
-    return {
-        "data": {
-            "token": access_token,
-            "user_id": str(new_user.id),
-            "email": new_user.email,
-            "username": new_user.username,
-            "role": new_user.role,
-        }
-    }
-
-
 @router.post("/refresh", response_model=dict)
 async def refresh_token(
     current_user: User = Depends(get_current_user),
@@ -144,9 +111,9 @@ async def list_users(
 async def create_user_admin(
     user_data: UserCreateAdmin,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
 ):
-    """Create a new user (admin only). Admin can set role and is_active."""
+    """Create a new user. Only super-admin (admin@test.com) can create users."""
     # Проверка существующего пользователя по email и username
     result = await db.execute(
         select(User).where(
@@ -181,9 +148,9 @@ async def update_user_role(
     user_id: UUID,
     body: UserUpdateRole,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
 ):
-    """Update user role (admin only)."""
+    """Update user role. Only super-admin can change roles."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -199,9 +166,9 @@ async def update_user(
     user_id: UUID,
     body: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
 ):
-    """Update user email, username, password, role (admin only)."""
+    """Update user. Only super-admin can edit users."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -239,9 +206,9 @@ async def update_user(
 async def delete_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
 ):
-    """Delete user (admin only). Cannot delete yourself."""
+    """Delete user. Only super-admin can delete users. Cannot delete yourself."""
     if current_user.id == user_id:
         raise HTTPException(
             status_code=400,

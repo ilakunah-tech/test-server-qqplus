@@ -23,7 +23,7 @@ from sqlalchemy import select, func, delete, and_
 from uuid import UUID
 from typing import Optional, Any, List
 from datetime import datetime, date, timezone, timedelta
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, require_roasts_can_edit, require_roasts_mutate
 from app.models.user import User
 from app.models.roast import Roast
 from app.models.roast_profile import RoastProfile
@@ -255,7 +255,12 @@ async def _enrich_roast_from_profile(roast: Roast, db: AsyncSession) -> dict[str
     if roast.weight_loss is None:
         wl = computed.get("weight_loss")
         if wl is not None:
-            out["weight_loss"] = float(wl) if float(wl) <= 1 else float(wl) / 100.0
+            vl = float(wl)
+            # Artisan stores weight_loss as decimal (0..1) or percentage (>1)
+            pct = vl * 100.0 if vl <= 1 else vl
+            # Sanity: coffee weight loss is typically 10-25%, never > 50%
+            if 0 < pct < 50:
+                out["weight_loss"] = pct
 
     return out
 
@@ -529,7 +534,7 @@ async def list_references(
 async def create_or_update_roast(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     """
@@ -1023,6 +1028,13 @@ async def get_roast(
     enriched = await _enrich_roast_from_profile(roast, db)
     if enriched:
         resp_data.update(enriched)
+    try:
+        goals_check = await check_roast_against_goals(roast, db)
+        if goals_check:
+            resp_data["goals_status"] = goals_check["status"]
+            resp_data["goals_check"] = goals_check
+    except Exception as e:
+        logger.warning(f"Error checking goals for roast {roast.id}: {e}")
     res = {
         "data": resp_data,
         "result": _roast_to_artisan_result(roast),
@@ -1035,7 +1047,7 @@ async def patch_roast(
     roast_id: str,
     body: RoastUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_can_edit),
 ):
     """
     Partial update of a roast (e.g. for Quality Control: notes, cupping_score, label).
@@ -1106,7 +1118,7 @@ async def patch_roast(
 async def delete_roast(
     roast_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """
     Delete a roast and restore stock weight.
@@ -1164,7 +1176,7 @@ async def create_reference(
     roast_id: str,
     body: CreateReferenceBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Mark a roast as reference (эталон): set reference_name, coffee or blend, machine."""
     try:
@@ -1195,7 +1207,7 @@ async def replace_reference(
     roast_id: str,
     body: ReplaceReferenceBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Replace an existing reference with this roast: unmark the old, mark this one."""
     try:
@@ -1232,7 +1244,7 @@ async def replace_reference(
 async def remove_reference(
     roast_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Remove reference flag from a roast."""
     try:
@@ -1258,7 +1270,7 @@ async def upload_profile(
     roast_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Upload .alog profile file for a roast. Saves to disk and DB (roast_profiles)."""
     try:
@@ -1314,7 +1326,11 @@ async def upload_profile(
                 wl = computed.get("weight_loss")
                 if wl is not None:
                     vl = float(wl)
-                    roast.weight_loss = vl if vl > 1 else vl * 100.0
+                    # Artisan stores weight_loss as decimal (0..1) or percentage (>1)
+                    pct = vl * 100.0 if vl <= 1 else vl
+                    # Sanity: coffee weight loss is typically 10-25%, never > 50%
+                    if 0 < pct < 50:
+                        roast.weight_loss = pct
         finally:
             try:
                 os.unlink(temp_path)
@@ -1586,7 +1602,7 @@ async def get_goal_by_id(
 async def create_goal_endpoint(
     goal_data: RoastGoalCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Create a new roast goal."""
     try:
@@ -1629,7 +1645,7 @@ async def update_goal_endpoint(
     goal_id: UUID,
     goal_data: RoastGoalUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Update a roast goal."""
     result = await db.execute(select(RoastGoal).where(RoastGoal.id == goal_id))
@@ -1663,7 +1679,7 @@ async def update_goal_endpoint(
 async def delete_goal_endpoint(
     goal_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roasts_mutate),
 ):
     """Delete a roast goal."""
     result = await db.execute(select(RoastGoal).where(RoastGoal.id == goal_id))

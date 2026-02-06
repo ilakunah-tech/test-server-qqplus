@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from uuid import UUID
 from typing import Optional
 from datetime import date, datetime, timezone
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, require_full_access
 from app.models.user import User
 from app.models.schedule import Schedule
 from app.models.coffee import Coffee
@@ -31,7 +31,7 @@ async def list_schedule(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """List schedules with optional filters (status, coffee_id, batch_id, date range)."""
     query = select(Schedule).where(Schedule.user_id == current_user.id)
@@ -71,7 +71,7 @@ async def list_schedule(
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Create a new schedule item."""
     if schedule_data.coffee_id:
@@ -104,7 +104,7 @@ async def create_schedule(
 async def get_schedule(
     schedule_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Get a single schedule item by ID."""
     result = await db.execute(
@@ -124,7 +124,7 @@ async def complete_schedule(
     schedule_id: UUID,
     complete_data: ScheduleCompleteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Mark a schedule item as completed and link it to a roast."""
     result = await db.execute(
@@ -159,7 +159,7 @@ async def update_schedule(
     schedule_id: UUID,
     schedule_data: ScheduleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Update a schedule item by ID."""
     result = await db.execute(
@@ -182,7 +182,7 @@ async def update_schedule(
 async def lock_schedule(
     today: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Artisan-compatible: lock schedule (no-op for local server)."""
     return {"success": True}
@@ -192,7 +192,7 @@ async def lock_schedule(
 async def delete_schedule(
     schedule_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Delete a schedule item by ID."""
     result = await db.execute(

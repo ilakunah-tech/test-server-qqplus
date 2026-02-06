@@ -20,25 +20,28 @@ def check_parameter(
 ) -> Dict[str, Any]:
     """
     Check if actual value is within tolerance of reference value.
-    
+
+    - actual or reference None → yellow (missing data).
+    - In range [ref - tolerance/2, ref + tolerance/2] → green.
+    - Outside range → red (then goal.failed_status can downgrade to yellow if "warning").
+
     Args:
         reference_value: Target value from reference profile
         actual_value: Actual value from roast
-        tolerance: Tolerance (will be divided by 2: ±tolerance/2)
-    
-    Returns:
-        Dict with 'status' ('green' | 'yellow' | 'red') and 'message'
+        tolerance: Tolerance (will be divided by 2: ±tolerance/2). If 0, only exact match passes.
     """
     if actual_value is None:
         return {"status": "yellow", "message": "Значение отсутствует в обжарке"}
-    
+
     if reference_value is None:
         return {"status": "yellow", "message": "Значение отсутствует в референсе"}
-    
+
     half_tolerance = tolerance / 2.0
+    if half_tolerance <= 0:
+        half_tolerance = 1e-6
     min_value = reference_value - half_tolerance
     max_value = reference_value + half_tolerance
-    
+
     if min_value <= actual_value <= max_value:
         return {
             "status": "green",
@@ -263,29 +266,33 @@ async def check_roast_against_goals(
             result = check_parameter(ref_value, actual_value, tolerance)
             checked_params[param_name] = result
             
-            # Update goal status
+            # Update goal status with respect to failed_status and missing_value_status
             if result["status"] == "red":
-                goal_status = "red"
+                if goal.failed_status == "warning":
+                    goal_status = "yellow" if goal_status != "red" else goal_status
+                else:
+                    goal_status = "red"
             elif result["status"] == "yellow" and goal_status != "red":
-                # Yellow only if no red found yet
                 if goal.missing_value_status == "failed":
                     goal_status = "red"
                 else:
                     goal_status = "yellow"
         
+        if not checked_params:
+            continue
         goal_results.append({
             "goal_id": str(goal.id),
             "goal_name": goal.name,
             "status": goal_status,
             "parameters": checked_params,
         })
-        
-        # Update overall status
         if goal_status == "red":
             overall_status = "red"
         elif goal_status == "yellow" and overall_status == "green":
             overall_status = "yellow"
-    
+
+    if not goal_results:
+        return None
     return {
         "status": overall_status,
         "goals": goal_results,

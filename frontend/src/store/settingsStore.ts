@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type Theme = 'light' | 'dark' | 'system';
+
+/** Effective theme for display (light or dark). Used when theme is 'system'. */
+export function getEffectiveTheme(theme: Theme): 'light' | 'dark' {
+  if (theme === 'dark') return 'dark';
+  if (theme === 'light') return 'light';
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 export type Language = 'ru' | 'en';
 export type DateFormat = 'dd.MM.yyyy' | 'yyyy-MM-dd';
 export type WeightFormat = 'kg' | 'lb';

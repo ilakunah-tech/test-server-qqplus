@@ -23,11 +23,21 @@ export const Layout = ({ children }: LayoutProps) => {
   }, [isAuthenticated]);
 
   return (
-    <div className="min-h-screen bg-purple-50/30 dark:bg-gray-900">
-      <Header sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-      <div className="flex min-w-0 flex-1">
-        <Sidebar open={sidebarOpen} />
-        <main className="min-w-0 flex-1 overflow-x-hidden p-6 bg-purple-50/30 dark:bg-gray-900">{children}</main>
+    <div className="min-h-screen bg-gradient-to-br from-[#fffbf7] via-[#fff8f0] to-[#fffbf7] dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+      {/* Subtle mesh gradient overlay */}
+      <div className="fixed inset-0 bg-qq-mesh pointer-events-none opacity-60 dark:opacity-30" />
+      
+      <div className="relative">
+        <Header sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
+        <div className="flex min-w-0 flex-1">
+          <Sidebar open={sidebarOpen} />
+          <main className="relative min-w-0 flex-1 overflow-x-hidden p-6 lg:p-8">
+            {/* Page content with subtle animation */}
+            <div className="animate-fade-in">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );

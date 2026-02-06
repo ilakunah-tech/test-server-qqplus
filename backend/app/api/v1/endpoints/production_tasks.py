@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID
 from typing import Optional
 from datetime import datetime, date, time as time_type, timedelta
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, require_full_access
 from app.models.user import User
 from app.models.production_task import ProductionTask, ProductionTaskHistory
 from app.models.user_machine import UserMachine
@@ -58,7 +58,7 @@ async def list_tasks(
     is_active: Optional[bool] = Query(None),
     machine_id: Optional[UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """List production tasks with optional filters"""
     query = select(ProductionTask).where(ProductionTask.user_id == current_user.id)
@@ -101,7 +101,7 @@ async def list_tasks(
 async def get_task(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Get a single production task"""
     query = select(ProductionTask).where(
@@ -131,7 +131,7 @@ async def get_task(
 async def create_task(
     data: ProductionTaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Create a new production task"""
     _validate_task_create(data)
@@ -185,7 +185,7 @@ async def update_task(
     task_id: UUID,
     data: ProductionTaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Update a production task"""
     query = select(ProductionTask).where(
@@ -238,7 +238,7 @@ async def update_task(
 async def delete_task(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Delete a production task"""
     query = select(ProductionTask).where(
@@ -269,7 +269,7 @@ async def list_history(
     machine_id: Optional[UUID] = Query(None),
     completed_only: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """List production task history"""
     query = select(ProductionTaskHistory).where(ProductionTaskHistory.user_id == current_user.id)
@@ -304,7 +304,7 @@ async def list_history(
 async def mark_completed(
     history_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Mark a history item as completed"""
     query = select(ProductionTaskHistory).where(
@@ -342,7 +342,7 @@ async def snooze_task(
     history_id: UUID,
     data: ProductionTaskSnoozeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_full_access),
 ):
     """Snooze a task notification"""
     query = select(ProductionTaskHistory).where(

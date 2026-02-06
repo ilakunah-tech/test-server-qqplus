@@ -61,17 +61,13 @@ export const authApi = {
     return response.data;
   },
 
-  register: async (
-    username: string,
-    email: string,
-    password: string,
-    passwordConfirm: string
-  ): Promise<ApiResponse<TokenResponse & { email?: string; username?: string; role?: UserRole }>> => {
-    const response = await apiClient.post<ApiResponse<TokenResponse>>('/auth/register', {
-      username: username.trim(),
-      email,
-      password,
-      password_confirm: passwordConfirm,
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.patch<ApiResponse<{ message: string }>>('/auth/me/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
     });
     return response.data;
   },

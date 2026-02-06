@@ -5,36 +5,43 @@ import { getMachinesCatalog, getMyMachines, addMachine, removeMachine, type User
 import { authApi } from '@/api/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { authStore } from '@/store/authStore';
-import { settingsStore, type Theme, type Language, type DateFormat, type WeightFormat, type TempFormat, type DefaultPageSize } from '@/store/settingsStore';
+import { settingsStore, type DateFormat, type WeightFormat, type TempFormat, type DefaultPageSize } from '@/store/settingsStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Settings, Plus, Trash2, User, Bell, Palette, Info, LogOut, Cpu, Target, Users } from 'lucide-react';
 import { GoalsTab } from '@/components/Goals/GoalsTab';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type SettingsTab = 'machines' | 'profile' | 'notifications' | 'interface' | 'goals' | 'about' | 'users';
 
-const TABS: { id: SettingsTab; label: string; icon: typeof Cpu; adminOnly?: boolean }[] = [
-  { id: 'machines', label: 'Машины', icon: Cpu },
-  { id: 'profile', label: 'Профиль', icon: User },
-  { id: 'notifications', label: 'Оповещения', icon: Bell },
-  { id: 'interface', label: 'Интерфейс', icon: Palette },
-  { id: 'goals', label: 'Цели', icon: Target },
-  { id: 'about', label: 'О приложении', icon: Info },
-  { id: 'users', label: 'Users', icon: Users, adminOnly: true },
+const TABS: { id: SettingsTab; labelKey: string; icon: typeof Cpu; adminOnly?: boolean }[] = [
+  { id: 'machines', labelKey: 'settings.machines', icon: Cpu },
+  { id: 'profile', labelKey: 'settings.profile', icon: User },
+  { id: 'notifications', labelKey: 'settings.notifications', icon: Bell },
+  { id: 'interface', labelKey: 'settings.interface', icon: Palette },
+  { id: 'goals', labelKey: 'settings.goals', icon: Target },
+  { id: 'about', labelKey: 'settings.about', icon: Info },
+  { id: 'users', labelKey: 'users.users', icon: Users, adminOnly: true },
 ];
 
 export const SettingsPage = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('machines');
   const [newMachineName, setNewMachineName] = useState('');
   const [addFromCatalog, setAddFromCatalog] = useState('');
+  const [changePwdCurrent, setChangePwdCurrent] = useState('');
+  const [changePwdNew, setChangePwdNew] = useState('');
+  const [changePwdConfirm, setChangePwdConfirm] = useState('');
   const queryClient = useQueryClient();
   const { logout } = useAuth();
   const email = authStore((s) => s.email);
   const isAdmin = authStore((s) => s.role === 'admin');
+  const isSuperAdmin = email?.toLowerCase() === 'admin@test.com';
 
   const { data: catalog = [] } = useQuery({
     queryKey: ['machines', 'catalog'],
@@ -81,6 +88,29 @@ export const SettingsPage = () => {
     addMutation.mutate(name);
   };
 
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ current, newPwd }: { current: string; newPwd: string }) =>
+      authApi.changePassword(current, newPwd),
+    onSuccess: () => {
+      setChangePwdCurrent('');
+      setChangePwdNew('');
+      setChangePwdConfirm('');
+    },
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changePwdNew.length < 8) {
+      alert(t('settings.passwordMinLength'));
+      return;
+    }
+    if (changePwdNew !== changePwdConfirm) {
+      alert(t('settings.passwordsDoNotMatch'));
+      return;
+    }
+    changePasswordMutation.mutate({ current: changePwdCurrent, newPwd: changePwdNew });
+  };
+
   const displayEmail = meData?.data?.email ?? email ?? '—';
 
   return (
@@ -88,14 +118,14 @@ export const SettingsPage = () => {
       <div>
         <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <Settings className="w-8 h-8" />
-          Setting
+          {t('settings.settings')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">Машины, профиль, интерфейс и другие параметры</p>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">{t('settings.pageSubtitle')}</p>
       </div>
 
       {/* Табы */}
       <div className="flex gap-2 flex-wrap border-b border-gray-200 dark:border-gray-700 pb-2">
-        {TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => {
+        {TABS.filter((tab) => (tab.id === 'users' ? isSuperAdmin : !tab.adminOnly || isAdmin)).map((tab) => {
           const Icon = tab.icon;
           const isUsersTab = tab.id === 'users';
           return (
@@ -113,7 +143,7 @@ export const SettingsPage = () => {
               className="gap-2"
             >
               <Icon className="w-4 h-4" />
-              {tab.label}
+              {t(tab.labelKey)}
             </Button>
           );
         })}
@@ -123,21 +153,21 @@ export const SettingsPage = () => {
       {activeTab === 'machines' && (
         <Card>
           <CardHeader>
-            <CardTitle>Мои машины</CardTitle>
+            <CardTitle>{t('settings.myMachines')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Машины, на которых вы жарите. Используются при создании эталонных профилей и в расписании.
+              {t('settings.addFromCatalog')}. {t('sidebar.readyToCreate')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="block mb-2">Добавить из каталога Artisan</Label>
+              <Label className="block mb-2">{t('settings.addFromCatalog')}</Label>
               <div className="flex gap-2 flex-wrap">
                 <Select
                   value={addFromCatalog}
                   onChange={(e) => setAddFromCatalog(e.target.value)}
                   className="min-w-[200px]"
                 >
-                  <option value="">— Выберите машину —</option>
+                  <option value="">— {t('roasts.selectMachine')} —</option>
                   {catalog
                     .filter((name) => !myMachines.some((m) => m.name === name))
                     .map((name) => (
@@ -152,13 +182,13 @@ export const SettingsPage = () => {
                   disabled={!addFromCatalog.trim() || addMutation.isPending}
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  Добавить
+                  {t('settings.add')}
                 </Button>
               </div>
             </div>
 
             <div>
-              <Label className="block mb-2">Или введите название вручную</Label>
+              <Label className="block mb-2">{t('settings.orEnterName')}</Label>
               <form onSubmit={handleAddCustom} className="flex gap-2">
                 <Input
                   value={newMachineName}
@@ -168,23 +198,23 @@ export const SettingsPage = () => {
                 />
                 <Button type="submit" disabled={!newMachineName.trim() || addMutation.isPending}>
                   <Plus className="w-4 h-4 mr-1" />
-                  Добавить
+                  {t('settings.add')}
                 </Button>
               </form>
             </div>
 
             {addMutation.isError && (
               <p className="text-sm text-red-600">
-                {(addMutation.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Ошибка добавления'}
+                {(addMutation.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? t('settings.addError')}
               </p>
             )}
 
             <div>
-              <Label className="block mb-2">Машины в организации ({myMachines.length})</Label>
+              <Label className="block mb-2">{t('settings.machinesInOrg')} ({myMachines.length})</Label>
               {myMachines.length === 0 ? (
-                <p className="text-gray-500 text-sm">Пока нет машин. Добавьте из каталога или введите название.</p>
+                <p className="text-gray-500 text-sm">{t('settings.noMachinesYet')}</p>
               ) : (
-                <ul className="border rounded divide-y">
+                <ul className="border rounded divide-y dark:border-gray-600">
                   {myMachines.map((m: UserMachine) => (
                     <li
                       key={m.id}
@@ -212,26 +242,80 @@ export const SettingsPage = () => {
       {activeTab === 'profile' && (
         <Card>
           <CardHeader>
-            <CardTitle>Профиль</CardTitle>
+            <CardTitle>{t('settings.profile')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Информация об учётной записи и выход из системы.
+              {t('settings.profileDesc')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
             {meData?.data?.username != null && meData.data.username !== '' && (
               <div>
-                <Label className="block mb-2">Username</Label>
+                <Label className="block mb-2">{t('users.username')}</Label>
                 <p className="text-gray-900 font-medium">{meData.data.username}</p>
               </div>
             )}
             <div>
-              <Label className="block mb-2">Email</Label>
+              <Label className="block mb-2">{t('login.email')}</Label>
               <p className="text-gray-900 font-medium">{displayEmail}</p>
             </div>
+
+            <div className="pt-4 border-t space-y-4">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100">{t('settings.changePassword')}</h4>
+              <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
+                <div>
+                  <Label htmlFor="change-pwd-current" className="block mb-1">{t('settings.currentPassword')}</Label>
+                  <PasswordInput
+                    id="change-pwd-current"
+                    value={changePwdCurrent}
+                    onChange={(e) => setChangePwdCurrent(e.target.value)}
+                    placeholder="••••••••"
+                    required={changePwdNew.length > 0 || changePwdConfirm.length > 0}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="change-pwd-new" className="block mb-1">{t('settings.newPassword')}</Label>
+                  <PasswordInput
+                    id="change-pwd-new"
+                    value={changePwdNew}
+                    onChange={(e) => setChangePwdNew(e.target.value)}
+                    placeholder={t('settings.minChars')}
+                    minLength={8}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="change-pwd-confirm" className="block mb-1">{t('settings.repeatNewPassword')}</Label>
+                  <PasswordInput
+                    id="change-pwd-confirm"
+                    value={changePwdConfirm}
+                    onChange={(e) => setChangePwdConfirm(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={8}
+                    className="w-full"
+                  />
+                </div>
+                {changePasswordMutation.isError && (
+                  <p className="text-sm text-red-600">
+                    {(changePasswordMutation.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? t('settings.passwordChangeError')}
+                  </p>
+                )}
+                {changePasswordMutation.isSuccess && (
+                  <p className="text-sm text-green-600">{t('settings.passwordChanged')}</p>
+                )}
+                <Button
+                  type="submit"
+                  disabled={!changePwdCurrent.trim() || changePwdNew.length < 8 || changePwdNew !== changePwdConfirm || changePasswordMutation.isPending}
+                >
+                  {changePasswordMutation.isPending ? t('users.saving') : t('settings.changePasswordBtn')}
+                </Button>
+              </form>
+            </div>
+
             <div className="pt-4 border-t">
               <Button variant="outline" onClick={logout} className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/50">
                 <LogOut className="w-4 h-4 mr-2" />
-                Выйти из аккаунта
+                {t('settings.logoutAccount')}
               </Button>
             </div>
           </CardContent>
@@ -241,9 +325,9 @@ export const SettingsPage = () => {
       {activeTab === 'notifications' && (
         <Card>
           <CardHeader>
-            <CardTitle>Оповещения</CardTitle>
+            <CardTitle>{t('settings.notifications')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Управление уведомлениями в реальном времени (WebSocket) и звуковыми сигналами.
+              {t('settings.notificationsDesc')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -255,9 +339,9 @@ export const SettingsPage = () => {
       {activeTab === 'interface' && (
         <Card>
           <CardHeader>
-            <CardTitle>Интерфейс</CardTitle>
+            <CardTitle>{t('settings.interface')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Язык, тема, форматы даты, веса, температуры и размер списка по умолчанию.
+              {t('settings.interfaceDesc')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -269,9 +353,9 @@ export const SettingsPage = () => {
       {activeTab === 'goals' && (
         <Card>
           <CardHeader>
-            <CardTitle>Цели обжарки</CardTitle>
+            <CardTitle>{t('settings.goals')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Настройка целей для сравнения обжаренных батчей с референсными профилями. Установите параметры и допуски для контроля качества обжарки.
+              {t('settings.goalsDesc')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -283,24 +367,24 @@ export const SettingsPage = () => {
       {activeTab === 'about' && (
         <Card>
           <CardHeader>
-            <CardTitle>О приложении</CardTitle>
+            <CardTitle>{t('settings.aboutApp')}</CardTitle>
             <p className="text-sm text-gray-500 font-normal">
-              Информация о Artisan+ Local Server.
+              {t('settings.aboutDesc')}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <p className="font-medium text-gray-900">Artisan+ Local Server</p>
-              <p className="text-sm text-gray-600">
-                Версия фронтенда: <strong>1.0.0</strong>
+              <p className="font-medium text-gray-900 dark:text-gray-100">{t('settings.artisanServer')}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('settings.frontendVersion')}: <strong>1.0.0</strong>
               </p>
-              <p className="text-sm text-gray-600">
-                Совместим с Artisan — настольным приложением для профилирования обжарки кофе.
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('settings.compatibleWithArtisan')}
               </p>
             </div>
             <div className="pt-4 border-t">
-              <p className="text-sm text-gray-600">
-                Подключение Artisan: укажите URL сервера в настройках Artisan (например, <code className="bg-gray-100 px-1 rounded">http://localhost:8000</code>).
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('settings.artisanConnect')}
               </p>
             </div>
           </CardContent>
@@ -311,6 +395,7 @@ export const SettingsPage = () => {
 };
 
 function NotificationsSettings() {
+  const { t } = useTranslation();
   const wsNotifications = settingsStore((s) => s.wsNotifications);
   const soundNotifications = settingsStore((s) => s.soundNotifications);
   const setWsNotifications = settingsStore((s) => s.setWsNotifications);
@@ -319,8 +404,8 @@ function NotificationsSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Label className="block font-medium">WebSocket-уведомления</Label>
-          <p className="text-sm text-gray-500">Получать push-уведомления о расписании и новых обжарках</p>
+          <Label className="block font-medium">{t('settings.wsNotifications')}</Label>
+          <p className="text-sm text-gray-500">{t('settings.wsNotificationsDesc')}</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -329,13 +414,13 @@ function NotificationsSettings() {
             onChange={(e) => setWsNotifications(e.target.checked)}
             className="w-4 h-4 text-brand rounded border-gray-300 focus:ring-brand"
           />
-          <span className="text-sm">Включено</span>
+          <span className="text-sm">{t('settings.enabled')}</span>
         </label>
       </div>
       <div className="flex items-center justify-between">
         <div>
-          <Label className="block font-medium">Звуковые уведомления</Label>
-          <p className="text-sm text-gray-500">Воспроизводить звук при новых событиях</p>
+          <Label className="block font-medium">{t('settings.soundNotifications')}</Label>
+          <p className="text-sm text-gray-500">{t('settings.soundNotificationsDesc')}</p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -344,7 +429,7 @@ function NotificationsSettings() {
             onChange={(e) => setSoundNotifications(e.target.checked)}
             className="w-4 h-4 text-brand rounded border-gray-300 focus:ring-brand"
           />
-          <span className="text-sm">Включено</span>
+          <span className="text-sm">{t('settings.enabled')}</span>
         </label>
       </div>
     </div>
@@ -352,15 +437,12 @@ function NotificationsSettings() {
 }
 
 function InterfaceSettings() {
-  const theme = settingsStore((s) => s.theme);
-  const language = settingsStore((s) => s.language);
+  const { t } = useTranslation();
   const dateFormat = settingsStore((s) => s.dateFormat);
   const weightFormat = settingsStore((s) => s.weightFormat);
   const tempFormat = settingsStore((s) => s.tempFormat);
   const defaultPageSize = settingsStore((s) => s.defaultPageSize);
 
-  const setTheme = settingsStore((s) => s.setTheme);
-  const setLanguage = settingsStore((s) => s.setLanguage);
   const setDateFormat = settingsStore((s) => s.setDateFormat);
   const setWeightFormat = settingsStore((s) => s.setWeightFormat);
   const setTempFormat = settingsStore((s) => s.setTempFormat);
@@ -369,43 +451,28 @@ function InterfaceSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <Label className="block mb-2">Тема</Label>
-        <Select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}>
-          <option value="light">Светлая</option>
-          <option value="dark">Тёмная</option>
-          <option value="system">Системная</option>
-        </Select>
-      </div>
-      <div>
-        <Label className="block mb-2">Язык</Label>
-        <Select value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
-          <option value="ru">Русский</option>
-          <option value="en">English</option>
-        </Select>
-      </div>
-      <div>
-        <Label className="block mb-2">Формат даты</Label>
+        <Label className="block mb-2">{t('settings.dateFormat')}</Label>
         <Select value={dateFormat} onChange={(e) => setDateFormat(e.target.value as DateFormat)}>
           <option value="dd.MM.yyyy">DD.MM.YYYY</option>
           <option value="yyyy-MM-dd">YYYY-MM-DD</option>
         </Select>
       </div>
       <div>
-        <Label className="block mb-2">Единицы веса</Label>
+        <Label className="block mb-2">{t('settings.weightFormat')}</Label>
         <Select value={weightFormat} onChange={(e) => setWeightFormat(e.target.value as WeightFormat)}>
           <option value="kg">кг</option>
           <option value="lb">lb</option>
         </Select>
       </div>
       <div>
-        <Label className="block mb-2">Единицы температуры</Label>
+        <Label className="block mb-2">{t('settings.tempFormat')}</Label>
         <Select value={tempFormat} onChange={(e) => setTempFormat(e.target.value as TempFormat)}>
           <option value="C">°C</option>
           <option value="F">°F</option>
         </Select>
       </div>
       <div>
-        <Label className="block mb-2">Размер списка по умолчанию (Roasts)</Label>
+        <Label className="block mb-2">{t('settings.defaultPageSize')}</Label>
         <Select value={String(defaultPageSize)} onChange={(e) => setDefaultPageSize(Number(e.target.value) as DefaultPageSize)}>
           <option value="25">25</option>
           <option value="50">50</option>

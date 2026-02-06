@@ -19,7 +19,8 @@ import {
   downsample,
 } from '@/utils/roastCalculations';
 import { getRoastEvents } from '@/types/api';
-import { ArrowLeft, Upload, Download, Trash2, Star, Replace, StarOff, FileText, Calendar, Pencil } from 'lucide-react';
+import { authStore } from '@/store/authStore';
+import { ArrowLeft, Upload, Download, Trash2, Star, Replace, StarOff, FileText, Calendar, Pencil, Target, CheckCircle, AlertCircle, HelpCircle } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -35,6 +36,7 @@ import {
 import { EditRoastInfoDialog } from '@/components/Roasts/EditRoastInfoDialog';
 import type { Roast, Coffee } from '@/types/api';
 import type { Blend } from '@/api/blends';
+import { useTranslation } from '@/hooks/useTranslation';
 
 // ==================== HELPER COMPONENTS ====================
 
@@ -360,9 +362,12 @@ function EditReferenceBeansNotesDialog({
 // ==================== MAIN COMPONENT ====================
 
 export const RoastDetailPage = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const role = authStore((s) => s.role);
+  const canEditRoasts = role === 'user' || role === 'admin';
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Chart visibility state
@@ -719,13 +724,39 @@ export const RoastDetailPage = () => {
     return evts;
   }, [roast, computed, profile]);
 
+  // .alog weight is often [green_g, roasted_g, 'g'] — convert to kg when from profile
+  const profileWeightKg =
+    profile?.weight && Array.isArray(profile.weight) && profile.weight.length >= 2
+      ? (profile.weight[2] === 'g'
+          ? [(profile.weight[0] as number) / 1000, (profile.weight[1] as number) / 1000]
+          : [profile.weight[0] as number, profile.weight[1] as number])
+      : null;
+  const greenWeight = roast?.green_weight_kg ?? profileWeightKg?.[0] ?? undefined;
+  const roastedWeight =
+    roast?.roasted_weight_kg ?? profileWeightKg?.[1] ?? (computed?.weightout ? computed.weightout / 1000 : undefined);
+
   // Calculate derived values (prefer computed from profile)
+  // Priority: direct calculation from weights > computed > stored DB value
+  // Sanity check: coffee weight loss is typically 10-25%, never > 50%
   const weightLoss = useMemo(() => {
-    if (computed?.weight_loss != null && computed.weight_loss !== 100) {
-      return computed.weight_loss;
+    // 1. If both weights are available, always calculate directly — most reliable
+    const calculated = calculateWeightLoss(greenWeight, roastedWeight);
+    if (calculated != null && calculated > 0 && calculated < 50) {
+      return calculated;
     }
-    return roast?.weight_loss ?? calculateWeightLoss(roast?.green_weight_kg, roast?.roasted_weight_kg);
-  }, [roast, computed]);
+    // 2. Try computed from .alog profile (Artisan stores as decimal 0..1 or percentage 0..100)
+    if (computed?.weight_loss != null) {
+      const wl = computed.weight_loss;
+      // Artisan may store as decimal (e.g. 0.1447) or percentage (e.g. 14.47)
+      const pct = wl > 0 && wl <= 1 ? wl * 100 : wl;
+      if (pct > 0 && pct < 50) return pct;
+    }
+    // 3. Fall back to DB value (with sanity check)
+    if (roast?.weight_loss != null && roast.weight_loss > 0 && roast.weight_loss < 50) {
+      return roast.weight_loss;
+    }
+    return calculated;
+  }, [roast, computed, greenWeight, roastedWeight]);
 
   const phases = useMemo(() => {
     // Use computed phase times from profile if available
@@ -749,7 +780,10 @@ export const RoastDetailPage = () => {
 
   const tempUnit = profile?.mode || roast?.temp_unit || 'C';
   const hasAlogFile = Boolean(roast?.alog_file_path);
-  const roastDate = roast?.roasted_at ?? roast?.roast_date ?? (profile?.roastisodate ? `${profile.roastisodate}T${profile.roasttime || '00:00:00'}` : undefined);
+  const roastDate =
+    roast?.roasted_at ??
+    roast?.roast_date ??
+    (profile?.roastisodate ? `${profile.roastisodate}T${profile.roasttime || '00:00:00'}` : undefined);
 
   // Handlers
   const handleFileUpload = (file: File) => {
@@ -816,13 +850,6 @@ export const RoastDetailPage = () => {
   const storeId = profile?.plus_store || roast.location_hr_id;
   const machineName = profile?.roastertype || roast.machine;
   const operatorName = profile?.operator || roast.operator;
-  // .alog weight is often [green_g, roasted_g, 'g'] — convert to kg when from profile
-  const profileWeightKg =
-    profile?.weight && Array.isArray(profile.weight) && profile.weight.length >= 2
-      ? (profile.weight[2] === 'g' ? [(profile.weight[0] as number) / 1000, (profile.weight[1] as number) / 1000] : [profile.weight[0] as number, profile.weight[1] as number])
-      : null;
-  const greenWeight = roast.green_weight_kg ?? profileWeightKg?.[0] ?? undefined;
-  const roastedWeight = roast.roasted_weight_kg ?? profileWeightKg?.[1] ?? (computed?.weightout ? computed.weightout / 1000 : undefined);
 
   return (
     <div className="space-y-6">
@@ -834,15 +861,19 @@ export const RoastDetailPage = () => {
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowEditRoastInfoDialog(true)}
-                className="hover:text-brand dark:hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 inline-flex items-center gap-1"
-                title="Нажмите для редактирования названия, веса, машины, оператора"
-              >
-                {displayTitle}
-                <Pencil className="w-4 h-4 opacity-60" />
-              </button>
+              {canEditRoasts ? (
+                <button
+                  type="button"
+                  onClick={() => setShowEditRoastInfoDialog(true)}
+                  className="hover:text-brand dark:hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 inline-flex items-center gap-1"
+                  title="Нажмите для редактирования названия, веса, машины, оператора"
+                >
+                  {displayTitle}
+                  <Pencil className="w-4 h-4 opacity-60" />
+                </button>
+              ) : (
+                <span>{displayTitle}</span>
+              )}
             </h1>
             {roastDate && (
               <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{formatDateTime(roastDate)}</p>
@@ -875,7 +906,7 @@ export const RoastDetailPage = () => {
                 <Download className="w-4 h-4 mr-2" />
                 Скачать профиль
               </Button>
-            ) : (
+            ) : canEditRoasts ? (
               <div>
                 <input
                   type="file"
@@ -897,8 +928,8 @@ export const RoastDetailPage = () => {
                   Загрузить профиль
                 </Button>
               </div>
-            )}
-            {roast?.is_reference ? (
+            ) : null}
+            {canEditRoasts && roast?.is_reference ? (
               <>
                 <Button
                   variant="outline"
@@ -923,7 +954,7 @@ export const RoastDetailPage = () => {
                   Убрать из эталонов
                 </Button>
               </>
-            ) : (
+            ) : canEditRoasts && !roast?.is_reference ? (
               <>
                 <Button variant="outline" size="sm" onClick={() => setShowCreateRefDialog(true)} title="Создать новый эталон">
                   <Star className="w-4 h-4 mr-2" />
@@ -934,21 +965,23 @@ export const RoastDetailPage = () => {
                   Заменить эталон
                 </Button>
               </>
+            ) : null}
+            {canEditRoasts && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!window.confirm('Удалить эту обжарку? Склад будет восстановлен.')) return;
+                  if (id) deleteRoastMutation.mutate(id);
+                }}
+                disabled={deleteRoastMutation.isPending}
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/50"
+                title="Удалить обжарку"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить
+              </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!window.confirm('Удалить эту обжарку? Склад будет восстановлен.')) return;
-                if (id) deleteRoastMutation.mutate(id);
-              }}
-              disabled={deleteRoastMutation.isPending}
-              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/50"
-              title="Удалить обжарку"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Удалить
-            </Button>
           </div>
         </div>
       </div>
@@ -977,7 +1010,7 @@ export const RoastDetailPage = () => {
           isSubmitting={updateBeansNotesMutation.isPending}
         />
       )}
-      {showEditRoastInfoDialog && roast && id && (
+      {canEditRoasts && showEditRoastInfoDialog && roast && id && (
         <EditRoastInfoDialog
           roast={roast}
           onClose={() => setShowEditRoastInfoDialog(false)}
@@ -1048,14 +1081,14 @@ export const RoastDetailPage = () => {
                     }`
                   : null
               }
-              onClick={() => setShowEditRoastInfoDialog(true)}
+              onClick={canEditRoasts ? () => setShowEditRoastInfoDialog(true) : undefined}
             />
             
             {(storeName || storeId) && (
               <SummaryRow label="Склад:" value={`${storeId || ''} ${storeName || ''}`} />
             )}
             
-            <SummaryRow label="Машина:" value={machineName} onClick={() => setShowEditRoastInfoDialog(true)} />
+            <SummaryRow label="Машина:" value={machineName} onClick={canEditRoasts ? () => setShowEditRoastInfoDialog(true) : undefined} />
             
             <SummaryRow
               label="Оператор:"
@@ -1064,7 +1097,7 @@ export const RoastDetailPage = () => {
                   ? `${operatorName}${roast.email ? ` (${roast.email})` : ''}`
                   : null
               }
-              onClick={() => setShowEditRoastInfoDialog(true)}
+              onClick={canEditRoasts ? () => setShowEditRoastInfoDialog(true) : undefined}
             />
             
             <SummaryRow label="Дата:" value={roastDate ? formatDateTime(roastDate) : null} />
@@ -1356,6 +1389,99 @@ export const RoastDetailPage = () => {
         </CardContent>
       </Card>
       </div>
+
+      {/* Goals check */}
+      {roast && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Target className="w-5 h-5 text-brand" />
+              {t('roastDetail.goalsCheck')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {roast.goals_check ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      roast.goals_check.status === 'green'
+                        ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200'
+                        : roast.goals_check.status === 'red'
+                        ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200'
+                        : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'
+                    }`}
+                  >
+                    {roast.goals_check.status === 'green' && <CheckCircle className="w-4 h-4" />}
+                    {roast.goals_check.status === 'red' && <AlertCircle className="w-4 h-4" />}
+                    {roast.goals_check.status === 'yellow' && <HelpCircle className="w-4 h-4" />}
+                    {roast.goals_check.status === 'green'
+                      ? t('roasts.goalsStatusGreen')
+                      : roast.goals_check.status === 'red'
+                      ? t('roasts.goalsStatusRed')
+                      : t('roasts.goalsStatusYellow')}
+                  </span>
+                  {roast.goals_check.reference_roast_id && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {t('roastDetail.referenceRoast')}:{' '}
+                      <Link to={`/roasts/${roast.goals_check.reference_roast_id}`} className="text-brand hover:underline">
+                        {roast.goals_check.reference_roast_id.slice(0, 8)}…
+                      </Link>
+                    </span>
+                  )}
+                </div>
+                {roast.goals_check.message && (
+                  <p className="text-sm text-amber-700 dark:text-amber-300">{roast.goals_check.message}</p>
+                )}
+                <div className="space-y-3">
+                  {roast.goals_check.goals.map((g) => (
+                    <div
+                      key={g.goal_id}
+                      className={`rounded-lg border p-3 ${
+                        g.status === 'green'
+                          ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/20'
+                          : g.status === 'red'
+                          ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20'
+                          : 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium text-sm text-gray-900 dark:text-gray-100 mb-2">
+                        {g.status === 'green' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                        {g.status === 'red' && <AlertCircle className="w-4 h-4 text-red-600" />}
+                        {g.status === 'yellow' && <HelpCircle className="w-4 h-4 text-amber-600" />}
+                        {g.goal_name}
+                      </div>
+                      <ul className="space-y-1 text-xs">
+                        {Object.entries(g.parameters).map(([paramKey, param]) => (
+                          <li
+                            key={paramKey}
+                            className={`flex justify-between gap-2 ${
+                              param.status === 'green'
+                                ? 'text-green-700 dark:text-green-300'
+                                : param.status === 'red'
+                                ? 'text-red-700 dark:text-red-300'
+                                : 'text-amber-700 dark:text-amber-300'
+                            }`}
+                          >
+                            <span className="font-mono">{paramKey}</span>
+                            <span>
+                              {param.actual != null && param.reference != null
+                                ? `${param.actual.toFixed(1)} / ${param.reference.toFixed(1)}`
+                                : param.message ?? param.status}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('roastDetail.goalsCheckNoData')}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Temperature Chart */}
       {chartData.length > 0 && (

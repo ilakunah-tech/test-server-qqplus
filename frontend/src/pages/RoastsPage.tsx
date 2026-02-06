@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Plus, Upload, Download, Trash2, Search, Filter, RefreshCw, FileDown, LayoutGrid, Pencil, MoreVertical, ChevronLeft, ChevronRight, GitCompare, Printer } from 'lucide-react';
 import { EditRoastInfoDialog } from '@/components/Roasts/EditRoastInfoDialog';
+import { authStore } from '@/store/authStore';
 import { formatDateTimeTable, formatWeight, formatPercent, roastDisplayId } from '@/utils/formatters';
 import { calculateWeightLoss, formatTimeMMSS } from '@/utils/roastCalculations';
 import { exportToCSV, exportToExcel, EXPORT_COLUMNS, type ExportFormat, type ExportScope } from '@/utils/exportRoasts';
@@ -21,24 +22,25 @@ import { StickerPrint } from '@/components/StickerPrint/StickerPrint';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Roast } from '@/types/api';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const ROASTS_COLUMNS_STORAGE_KEY = 'roasts-visible-columns';
 
-const COLUMN_OPTIONS: { id: string; label: string; shortLabel: string }[] = [
-  { id: 'date', label: 'Дата', shortLabel: 'Дата' },
-  { id: 'name', label: 'Наименование', shortLabel: 'Наим.' },
-  { id: 'warehouse', label: 'Склад', shortLabel: 'Склад' },
-  { id: 'machine', label: 'Машина', shortLabel: 'Маш.' },
-  { id: 'user', label: 'Оператор', shortLabel: 'Опер.' },
-  { id: 'green_weight', label: 'Начальный вес', shortLabel: 'Нач. кг' },
-  { id: 'roasted_weight', label: 'Конечный вес', shortLabel: 'Кон. кг' },
-  { id: 'shrinkage', label: 'Ужарка', shortLabel: 'Ужарка' },
-  { id: 'dtr', label: 'Отношение времени развития (DTR)', shortLabel: 'DTR' },
-  { id: 'bean_color', label: 'Цвет зерна', shortLabel: 'Цв. зерна' },
-  { id: 'grind_color', label: 'Цвет помола', shortLabel: 'Цв. помола' },
-  { id: 'coffee', label: 'Кофе', shortLabel: 'Кофе' },
-  { id: 'rating', label: 'Оценка', shortLabel: 'Оценка' },
-  { id: 'quality_control', label: 'Контроль качества', shortLabel: 'КК' },
+const COLUMN_OPTIONS: { id: string; labelKey: string; shortLabelKey: string }[] = [
+  { id: 'date', labelKey: 'roasts.date', shortLabelKey: 'roasts.date' },
+  { id: 'name', labelKey: 'roasts.name', shortLabelKey: 'roasts.shortName' },
+  { id: 'warehouse', labelKey: 'roasts.warehouse', shortLabelKey: 'roasts.warehouse' },
+  { id: 'machine', labelKey: 'roasts.machine', shortLabelKey: 'roasts.shortMachine' },
+  { id: 'user', labelKey: 'roasts.operator', shortLabelKey: 'roasts.shortOperator' },
+  { id: 'green_weight', labelKey: 'roasts.greenWeight', shortLabelKey: 'roasts.shortGreenWeight' },
+  { id: 'roasted_weight', labelKey: 'roasts.roastedWeight', shortLabelKey: 'roasts.shortRoastedWeight' },
+  { id: 'shrinkage', labelKey: 'roasts.shrinkage', shortLabelKey: 'roasts.shrinkage' },
+  { id: 'dtr', labelKey: 'roasts.dtr', shortLabelKey: 'roasts.dtr' },
+  { id: 'bean_color', labelKey: 'roasts.beanColor', shortLabelKey: 'roasts.shortBeanColor' },
+  { id: 'grind_color', labelKey: 'roasts.grindColor', shortLabelKey: 'roasts.shortGrindColor' },
+  { id: 'coffee', labelKey: 'roasts.coffee', shortLabelKey: 'roasts.coffee' },
+  { id: 'rating', labelKey: 'roasts.rating', shortLabelKey: 'roasts.rating' },
+  { id: 'quality_control', labelKey: 'roasts.qualityControl', shortLabelKey: 'roasts.qualityControl' },
 ];
 
 const defaultVisibleColumnIds = new Set(COLUMN_OPTIONS.map((c) => c.id));
@@ -71,6 +73,7 @@ function RoastRowActions({
   onDelete,
   uploadPending,
   deletePending,
+  canEdit,
 }: {
   roastId: string;
   hasProfile: boolean;
@@ -79,7 +82,9 @@ function RoastRowActions({
   onDelete: () => void;
   uploadPending: boolean;
   deletePending: boolean;
+  canEdit: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -110,9 +115,9 @@ function RoastRowActions({
                 className="w-full px-4 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                 onClick={() => { onDownload(); setOpen(false); }}
               >
-                <Download className="w-4 h-4" /> Скачать профиль
+                <Download className="w-4 h-4" /> {t('roasts.downloadProfile')}
               </button>
-            ) : (
+            ) : canEdit ? (
               <>
                 <input
                   type="file"
@@ -130,18 +135,20 @@ function RoastRowActions({
                   onClick={() => { document.getElementById(`file-row-${roastId}`)?.click(); }}
                   disabled={uploadPending}
                 >
-                  <Upload className="w-4 h-4" /> Загрузить профиль
+                  <Upload className="w-4 h-4" /> {t('roasts.uploadProfile')}
                 </button>
               </>
+            ) : null}
+            {canEdit && (
+              <button
+                type="button"
+                className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 flex items-center gap-2"
+                onClick={() => { onDelete(); setOpen(false); }}
+                disabled={deletePending}
+              >
+                <Trash2 className="w-4 h-4" /> {t('roasts.delete')}
+              </button>
             )}
-            <button
-              type="button"
-              className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 flex items-center gap-2"
-              onClick={() => { onDelete(); setOpen(false); }}
-              disabled={deletePending}
-            >
-              <Trash2 className="w-4 h-4" /> Удалить
-            </button>
           </div>
         </>
       )}
@@ -152,7 +159,10 @@ function RoastRowActions({
 type RoastsTab = 'roasts' | 'references';
 
 export const RoastsPage = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const role = authStore((s) => s.role);
+  const canEditRoasts = role === 'user' || role === 'admin';
   const [activeTab, setActiveTab] = useState<RoastsTab>('roasts');
   const [showForm, setShowForm] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -166,6 +176,13 @@ export const RoastsPage = () => {
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [stickerPrintRoasts, setStickerPrintRoasts] = useState<Roast[] | null>(null);
+  const [manualStickerOpen, setManualStickerOpen] = useState(false);
+  const [manualStickerText, setManualStickerText] = useState('');
+  const [manualStickerFont, setManualStickerFont] = useState<'sans' | 'serif' | 'mono'>('sans');
+  const [manualStickerFontSize, setManualStickerFontSize] = useState<string>('9.5');
+  const [manualStickerBold, setManualStickerBold] = useState(false);
+  const [manualStickerItalic, setManualStickerItalic] = useState(false);
+  const [manualStickerUnderline, setManualStickerUnderline] = useState(false);
   const [editingRoast, setEditingRoast] = useState<Roast | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('xlsx');
   const [exportScope, setExportScope] = useState<ExportScope>('page');
@@ -193,15 +210,18 @@ export const RoastsPage = () => {
   const { data: batchesData } = useQuery({
     queryKey: ['batches'],
     queryFn: () => inventoryApi.getBatches(),
+    enabled: canEditRoasts,
   });
 
   const { data: coffeesData } = useQuery({
     queryKey: ['inventory', 'coffees'],
     queryFn: () => inventoryApi.getCoffees(500, 0),
+    enabled: canEditRoasts,
   });
   const { data: blendsListData } = useQuery({
     queryKey: ['blends'],
     queryFn: () => getBlends(500, 0),
+    enabled: canEditRoasts,
   });
 
   const { data: myMachines = [] } = useQuery({
@@ -256,7 +276,7 @@ export const RoastsPage = () => {
       queryClient.invalidateQueries({ queryKey: ['batches'] });
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail || 'Ошибка удаления');
+      alert(err.response?.data?.detail || t('roasts.deleteError'));
     },
   });
 
@@ -276,7 +296,7 @@ export const RoastsPage = () => {
       setEditingRoast(null);
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail || 'Ошибка сохранения');
+      alert(err.response?.data?.detail || t('roasts.saveError'));
     },
   });
 
@@ -287,7 +307,7 @@ export const RoastsPage = () => {
       queryClient.invalidateQueries({ queryKey: ['roasts', 'references'] });
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail || 'Ошибка снятия эталона');
+      alert(err.response?.data?.detail || t('roasts.removeReferenceError'));
     },
   });
 
@@ -319,7 +339,7 @@ export const RoastsPage = () => {
   };
 
   const handleDeleteRoast = (roastId: string) => {
-    if (!window.confirm('Удалить эту обжарку? Склад будет восстановлен.')) return;
+    if (!window.confirm(t('roastDetail.deleteRoastConfirm'))) return;
     deleteRoastMutation.mutate(roastId);
   };
 
@@ -328,7 +348,7 @@ export const RoastsPage = () => {
     if (exportScope === 'selected') {
       dataToExport = sortedRoasts.filter((r) => selectedIds.has(r.id));
       if (dataToExport.length === 0) {
-        alert('Выберите обжарки для экспорта');
+        alert(t('roasts.selectRoastsForExport'));
         return;
       }
     } else if (exportScope === 'all') {
@@ -360,21 +380,21 @@ export const RoastsPage = () => {
     }
 
     if (dataToExport.length === 0) {
-      alert('Нет данных для экспорта');
+      alert(t('roasts.noDataForExport'));
       return;
     }
 
     const columns = EXPORT_COLUMNS.filter((c) => visibleColumnIds.has(c.id));
     const cols = columns.length > 0 ? columns : EXPORT_COLUMNS;
     const headerLines = [
-      `Artisan+ — Экспорт обжарок`,
-      `Дата экспорта: ${format(new Date(), 'dd.MM.yyyy HH:mm', { locale: ru })}`,
-      `Записей: ${dataToExport.length}`,
+      t('roasts.exportTitle'),
+      `${t('roasts.exportDate')}: ${format(new Date(), 'dd.MM.yyyy HH:mm', { locale: ru })}`,
+      `${t('roasts.recordsCount')}: ${dataToExport.length}`,
       ...[
-        dateFrom || dateTo ? `Период: ${dateFrom || '…'} — ${dateTo || '…'}` : null,
-        filterMachine ? `Ростер: ${filterMachine}` : null,
-        filterCoffeeId ? `Кофе: ${coffeesData?.data?.items?.find((c) => c.id === filterCoffeeId)?.label ?? filterCoffeeId}` : null,
-        filterUserId ? `Пользователь: ${users.find((u) => u.id === filterUserId)?.email ?? filterUserId}` : null,
+        dateFrom || dateTo ? `${t('roasts.period')}: ${dateFrom || '…'} — ${dateTo || '…'}` : null,
+        filterMachine ? `${t('roasts.roaster')}: ${filterMachine}` : null,
+        filterCoffeeId ? `${t('roasts.coffee')}: ${coffeesData?.data?.items?.find((c) => c.id === filterCoffeeId)?.label ?? filterCoffeeId}` : null,
+        filterUserId ? `${t('roasts.userFilter')}: ${users.find((u) => u.id === filterUserId)?.email ?? filterUserId}` : null,
       ].filter(Boolean) as string[],
     ];
 
@@ -479,9 +499,23 @@ export const RoastsPage = () => {
     if (selectedIds.size === sortedRoasts.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(sortedRoasts.map((r) => r.id)));
   };
+
   const shrinkPct = (r: Roast): number | null => {
-    if (r.weight_loss != null) return r.weight_loss <= 1 ? r.weight_loss * 100 : r.weight_loss;
-    return calculateWeightLoss(r.green_weight_kg, r.roasted_weight_kg);
+    // 1. Если есть оба веса — считаем напрямую (надёжнее всего)
+    const calculated = calculateWeightLoss(r.green_weight_kg, r.roasted_weight_kg);
+    if (calculated != null && calculated > 0 && calculated < 50) {
+      return calculated;
+    }
+
+    // 2. Используем сохранённое значение из БД (может быть 0..1 или 0..100)
+    if (r.weight_loss != null) {
+      const raw = r.weight_loss;
+      const pct = raw > 0 && raw <= 1 ? raw * 100 : raw;
+      if (pct > 0 && pct < 50) return pct;
+    }
+
+    // 3. Фоллбэк — что посчитали по весам (может быть null/за пределами диапазона)
+    return calculated;
   };
 
   useEffect(() => {
@@ -490,14 +524,268 @@ export const RoastsPage = () => {
     el.indeterminate = sortedRoasts.length > 0 && selectedIds.size > 0 && selectedIds.size < sortedRoasts.length;
   }, [selectedIds.size, sortedRoasts.length]);
 
+  const handleManualStickerPrint = () => {
+    const trimmed = manualStickerText.trim();
+    if (!trimmed) {
+      alert(t('roasts.customStickerHint'));
+      return;
+    }
+
+    const escapeHtml = (s: string): string => {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    };
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Разрешите всплывающие окна для печати наклеек.');
+      return;
+    }
+
+    const safeText = escapeHtml(trimmed);
+
+    const fontFamily =
+      manualStickerFont === 'serif'
+        ? "Georgia, 'Times New Roman', serif"
+        : manualStickerFont === 'mono'
+          ? "'Courier New', Menlo, monospace"
+          : "Arial, Helvetica, sans-serif";
+    const sizePt = Number(manualStickerFontSize.replace(',', '.'));
+    const safeSize = Number.isFinite(sizePt) && sizePt > 4 && sizePt < 40 ? sizePt : 9.5;
+
+    const styleParts = [
+      `font-family:${fontFamily}`,
+      `font-size:${safeSize}pt`,
+      `font-weight:${manualStickerBold ? '700' : '400'}`,
+      `font-style:${manualStickerItalic ? 'italic' : 'normal'}`,
+      `text-decoration:${manualStickerUnderline ? 'underline' : 'none'}`,
+    ];
+    const textStyle = styleParts.join(';');
+
+    const stickersHtml = `
+      <div class="sticker">
+        <div class="sticker__inner">
+          <div class="sticker__body">
+            <div class="manual-text" style="${textStyle}">${safeText}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const doc = win.document;
+    doc.open();
+    doc.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(t('roasts.customStickerTitle'))}</title>
+  <script>
+    window.addEventListener('load', function() {
+      window.onafterprint = function() { window.close(); };
+      setTimeout(function() {
+        window.print();
+      }, 100);
+    });
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    @page { size: 58mm 40mm; margin: 0; }
+    
+    @media print {
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { width: 58mm !important; height: 40mm !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
+      .stickers { margin: 0 !important; padding: 0 !important; display: block !important; width: 58mm !important; height: 40mm !important; }
+      .sticker {
+        width: 58mm !important; height: 40mm !important; min-width: 58mm !important; min-height: 40mm !important;
+        margin: 0 !important; padding: 0 !important; border: none !important;
+        /* без явного page-break-after, чтобы не провоцировать второй лист на некоторых драйверах */
+        page-break-inside: avoid !important; break-inside: avoid !important;
+        display: flex !important; box-sizing: border-box !important; overflow: hidden !important;
+      }
+      .sticker * { page-break-inside: avoid !important; break-inside: avoid !important; }
+      .sticker__inner, .sticker__body, .sticker__text, .sticker__meta, .sticker__footer, .sticker__qr-wrap { display: flex !important; }
+      .sticker__qr { width: 44px !important; height: 44px !important; }
+      .sticker__qr img { width: 44px !important; height: 44px !important; image-rendering: crisp-edges !important; }
+    }
+    
+    html, body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      color: #000;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      width: 58mm;
+      height: 40mm;
+      overflow: hidden;
+    }
+    
+    .stickers { display: block; margin: 0; padding: 0; width: 58mm; height: 40mm; }
+    
+    .sticker {
+      width: 58mm;
+      height: 40mm;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      border: 0.35mm solid #000;
+      background: #fff;
+    }
+    
+    .sticker__inner {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      padding: 1.8mm;
+      gap: 0;
+    }
+    
+    .sticker__meta {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 6.5pt;
+      line-height: 1.35;
+      color: #333;
+      letter-spacing: 0.02em;
+      padding-bottom: 1mm;
+    }
+    
+    .sticker__label {
+      font-weight: 600;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-right: 0.5mm;
+    }
+    
+    .sticker__meta-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%; }
+    
+    .sticker__divider {
+      height: 0.25mm;
+      background: #000;
+      margin-bottom: 1.2mm;
+      flex-shrink: 0;
+    }
+    
+    .sticker__body {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 2mm;
+      flex: 1;
+      min-height: 0;
+    }
+    
+    .sticker__text {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+    
+    .sticker__title {
+      font-size: 9.5pt;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #000;
+      word-break: break-word;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      margin-bottom: 1mm;
+      letter-spacing: 0.01em;
+    }
+    
+    .sticker__footer {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 7pt;
+      line-height: 1.3;
+      color: #333;
+      margin-top: auto;
+    }
+    
+    .sticker__date { font-weight: 500; color: #000; }
+    
+    .sticker__goal {
+      font-weight: 700;
+      color: #000;
+      padding: 0.4mm 1.2mm;
+      border: 0.25mm solid #000;
+      border-radius: 0.5mm;
+      font-size: 6.5pt;
+      letter-spacing: 0.03em;
+    }
+    
+    .sticker__qr-wrap {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border: 0.25mm solid #000;
+      border-radius: 1mm;
+      padding: 1.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+    }
+    
+    .sticker__qr {
+      width: 40px;
+      height: 40px;
+      display: block;
+      object-fit: contain;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
+    }
+
+    .manual-text {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 1mm;
+    }
+  </style>
+</head>
+<body>
+  <div class="stickers">
+    ${stickersHtml}
+  </div>
+</body>
+</html>
+    `);
+    doc.close();
+    win.focus();
+    setManualStickerOpen(false);
+  };
+
   return (
     <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">
       {/* Заголовок страницы */}
-      <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Обжарки</h2>
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('roasts.roasts')}</h2>
 
-      {/* Вкладки: Обжарки / Референсы / Цели */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-8" aria-label="Вкладки">
+        <nav className="flex gap-8" aria-label={t('roasts.tabs')}>
           <button
             type="button"
             onClick={() => setActiveTab('roasts')}
@@ -505,7 +793,7 @@ export const RoastsPage = () => {
               activeTab === 'roasts' ? 'border-brand text-brand' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            ОБЖАРКИ
+            {t('roasts.tabRoasts').toUpperCase()}
           </button>
           <button
             type="button"
@@ -514,7 +802,7 @@ export const RoastsPage = () => {
               activeTab === 'references' ? 'border-brand text-brand' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            РЕФЕРЕНСЫ
+            {t('roasts.tabReferences').toUpperCase()}
           </button>
         </nav>
       </div>
@@ -523,7 +811,7 @@ export const RoastsPage = () => {
       {activeTab === 'references' && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-4 p-4 rounded-card border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Фильтр (необязательно):</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('roasts.filterOptional')}</span>
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -533,7 +821,7 @@ export const RoastsPage = () => {
                   onChange={() => setRefFilterType('coffee')}
                   className="text-brand focus:ring-brand"
                 />
-                Кофе
+                {t('roasts.coffee')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -543,7 +831,7 @@ export const RoastsPage = () => {
                   onChange={() => setRefFilterType('blend')}
                   className="text-brand focus:ring-brand"
                 />
-                Бленд
+                {t('roasts.blend')}
               </label>
             </div>
             {refFilterType === 'coffee' ? (
@@ -552,7 +840,7 @@ export const RoastsPage = () => {
                 onChange={(e) => setRefCoffeeHrId(e.target.value)}
                 className="min-w-[200px] rounded-input"
               >
-                <option value="">Выберите кофе</option>
+                <option value="">{t('roasts.selectCoffeeOption')}</option>
                 {(coffeesData?.data?.items ?? []).map((c) => (
                   <option key={c.id} value={c.hr_id}>
                     {c.label ?? c.name ?? c.hr_id}
@@ -565,7 +853,7 @@ export const RoastsPage = () => {
                 onChange={(e) => setRefBlendId(e.target.value)}
                 className="min-w-[200px] rounded-input"
               >
-                <option value="">Выберите бленд</option>
+                <option value="">{t('roasts.selectBlendOption')}</option>
                 {(blendsListData?.items ?? []).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
@@ -575,7 +863,7 @@ export const RoastsPage = () => {
             )}
             <Input
               type="text"
-              placeholder="Машина (необязательно)"
+              placeholder={t('roasts.machineOptional')}
               value={refMachine}
               onChange={(e) => setRefMachine(e.target.value)}
               className="min-w-[180px] rounded-input"
@@ -586,7 +874,7 @@ export const RoastsPage = () => {
               onClick={() => queryClient.invalidateQueries({ queryKey: ['roasts', 'references'] })}
             >
               <RefreshCw className="w-4 h-4 mr-1.5" />
-              Обновить
+              {t('roasts.refresh')}
             </Button>
           </div>
           <div className="relative min-w-0 w-full overflow-hidden rounded-card border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm">
@@ -602,23 +890,23 @@ export const RoastsPage = () => {
                 <table className="w-max min-w-full text-sm text-left">
                   <thead className="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-200 dark:border-gray-600 sticky top-0 z-10">
                     <tr>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">ID</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Дата</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Наименование</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Кофе / Бленд</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Машина</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Начальный вес</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Конечный вес</th>
-                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap w-14">Действия</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.byId')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.date')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.name')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.coffee')} / {t('roasts.blend')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.machine')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.greenWeight')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t('roasts.roastedWeight')}</th>
+                      <th className="py-3 px-4 font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap w-14">{t('roasts.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {((referencesData?.data?.items ?? []).length === 0 ? (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-gray-500">
-                          {refCoffeeHrId || refBlendId
-                            ? 'Нет эталонных обжарок по выбранному фильтру.'
-                            : 'Нет эталонных обжарок.'}
+{refCoffeeHrId || refBlendId
+                              ? t('roasts.noReferencesByFilter')
+                              : t('roasts.noReferences')}
                         </td>
                       </tr>
                     ) : (
@@ -640,21 +928,25 @@ export const RoastsPage = () => {
                               {r.roasted_weight_kg != null ? formatWeight(r.roasted_weight_kg) : '—'}
                             </td>
                             <td className="py-2 px-4">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Снять эталон"
-                                aria-label="Снять эталон"
-                                onClick={() => {
-                                  if (window.confirm('Снять эталон с этой обжарки? Обжарка останется в системе, но перестанет быть эталоном.')) {
-                                    removeReferenceMutation.mutate(r.id);
-                                  }
-                                }}
-                                disabled={removeReferenceMutation.isPending}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {canEditRoasts ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title={t('roasts.removeReference')}
+                                  aria-label={t('roasts.removeReference')}
+                                  onClick={() => {
+                                    if (window.confirm(t('roasts.removeReferenceConfirm'))) {
+                                      removeReferenceMutation.mutate(r.id);
+                                    }
+                                  }}
+                                  disabled={removeReferenceMutation.isPending}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -675,7 +967,7 @@ export const RoastsPage = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             type="search"
-            placeholder="Найти"
+            placeholder={t('roasts.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 rounded-input"
@@ -683,7 +975,7 @@ export const RoastsPage = () => {
         </div>
         <Button variant="outline" size="sm" className="gap-2" onClick={() => setFilterDialogOpen(true)}>
           <Filter className="w-4 h-4" />
-          ФИЛЬТР
+          {t('roasts.filters').toUpperCase()}
         </Button>
         <Button
           variant="outline"
@@ -692,11 +984,20 @@ export const RoastsPage = () => {
           onClick={() => queryClient.invalidateQueries({ queryKey: ['roasts'] })}
         >
           <RefreshCw className="w-4 h-4" />
-          ОБНОВИТЬ
+          {t('common.refresh').toUpperCase()}
         </Button>
         <Button variant="outline" size="sm" className="gap-2" onClick={() => setExportDialogOpen(true)}>
           <FileDown className="w-4 h-4" />
-          ЭКСПОРТ
+          {t('roasts.export').toUpperCase()}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => setManualStickerOpen(true)}
+        >
+          <Printer className="w-4 h-4" />
+          {t('roasts.customSticker').toUpperCase()}
         </Button>
         {selectedIds.size > 0 && (
           <Button
@@ -709,10 +1010,10 @@ export const RoastsPage = () => {
             }}
           >
             <Printer className="w-4 h-4" />
-            ПЕЧАТЬ НАКЛЕЕК ({selectedIds.size})
+            {t('roasts.printStickers').toUpperCase()} ({selectedIds.size})
           </Button>
         )}
-        {selectedIds.size >= 2 && selectedIds.size <= 10 && (
+        {canEditRoasts && selectedIds.size >= 2 && selectedIds.size <= 10 && (
           <Button
             variant="default"
             size="sm"
@@ -723,7 +1024,7 @@ export const RoastsPage = () => {
             }}
           >
             <GitCompare className="w-4 h-4" />
-            СРАВНИТЬ ({selectedIds.size})
+            {t('roasts.compare').toUpperCase()} ({selectedIds.size})
           </Button>
         )}
         <div className="relative">
@@ -741,7 +1042,7 @@ export const RoastsPage = () => {
               <div className="fixed inset-0 z-20" aria-hidden onClick={() => setColumnPickerOpen(false)} />
               <div className="absolute right-0 top-full mt-1 z-30 w-72 rounded-card border border-gray-200 bg-white shadow-lg py-3 px-3 max-h-[80vh] overflow-y-auto">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-1 pb-2 mb-2 border-b border-gray-100">
-                  Отображать в списке
+                  {t('roasts.displayInList')}
                 </p>
                 <ul className="space-y-1">
                   {COLUMN_OPTIONS.map((col) => (
@@ -753,7 +1054,7 @@ export const RoastsPage = () => {
                           onChange={() => toggleColumn(col.id)}
                           className="rounded border-gray-300 text-brand focus:ring-brand"
                         />
-                        <span className="text-sm text-gray-800">{col.label}</span>
+                        <span className="text-sm text-gray-800">{t(col.labelKey)}</span>
                       </label>
                     </li>
                   ))}
@@ -765,16 +1066,18 @@ export const RoastsPage = () => {
                   className="w-full mt-3"
                   onClick={() => setColumnPickerOpen(false)}
                 >
-                  ЗАКРЫТЬ
+                  {t('roasts.close').toUpperCase()}
                 </Button>
               </div>
             </>
           )}
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="ml-auto gap-2">
-          <Plus className="w-4 h-4" />
-          Добавить обжарку
-        </Button>
+        {canEditRoasts && (
+          <Button onClick={() => setShowForm(!showForm)} className="ml-auto gap-2">
+            <Plus className="w-4 h-4" />
+            {t('roasts.addRoast')}
+          </Button>
+        )}
       </div>
 
       {/* Диалог фильтров */}
@@ -782,78 +1085,80 @@ export const RoastsPage = () => {
         <>
           <div className="fixed inset-0 z-40 bg-black/30" aria-hidden onClick={() => setFilterDialogOpen(false)} />
           <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-gray-200 bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Фильтры обжарок</h3>
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">{t('roasts.filtersTitle')}</h3>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="filter_machine" className="text-sm">1. По ростерам</Label>
+                <Label htmlFor="filter_machine" className="text-sm">1. {t('roasts.byMachine')}</Label>
                 <Select
                   id="filter_machine"
                   value={filterMachine}
                   onChange={(e) => setFilterMachine(e.target.value)}
                   className="mt-1 rounded-input"
                 >
-                  <option value="">— Выберите ростер —</option>
+                  <option value="">{t('roasts.selectMachine')}</option>
                   {myMachines.map((m) => (
                     <option key={m.id} value={m.name}>{m.name}</option>
                   ))}
                 </Select>
                 {myMachines.length === 0 && (
-                  <p className="mt-1 text-xs text-gray-500">Добавьте машины в Настройках</p>
+                  <p className="mt-1 text-xs text-gray-500">{t('roasts.addMachinesInSettings')}</p>
                 )}
               </div>
-              <div>
-                <Label className="text-sm">2. По зерну / бленду</Label>
-                <div className="mt-1 flex gap-2">
-                  <Select
-                    value={filterCoffeeId}
-                    onChange={(e) => { setFilterCoffeeId(e.target.value); setFilterBlendId(''); }}
-                    className="flex-1 rounded-input"
-                  >
-                    <option value="">— Кофе —</option>
-                    {(coffeesData?.data?.items ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>{c.label ?? c.name ?? c.hr_id}</option>
-                    ))}
-                  </Select>
-                  <Select
-                    value={filterBlendId}
-                    onChange={(e) => { setFilterBlendId(e.target.value); setFilterCoffeeId(''); }}
-                    className="flex-1 rounded-input"
-                  >
-                    <option value="">— Бленд —</option>
-                    {(blendsListData?.items ?? []).map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </Select>
+              {canEditRoasts && (
+                <div>
+                  <Label className="text-sm">2. {t('roasts.byCoffeeBlend')}</Label>
+                  <div className="mt-1 flex gap-2">
+                    <Select
+                      value={filterCoffeeId}
+                      onChange={(e) => { setFilterCoffeeId(e.target.value); setFilterBlendId(''); }}
+                      className="flex-1 rounded-input"
+                    >
+                      <option value="">{t('roasts.selectCoffee')}</option>
+                      {(coffeesData?.data?.items ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.label ?? c.name ?? c.hr_id}</option>
+                      ))}
+                    </Select>
+                    <Select
+                      value={filterBlendId}
+                      onChange={(e) => { setFilterBlendId(e.target.value); setFilterCoffeeId(''); }}
+                      className="flex-1 rounded-input"
+                    >
+                      <option value="">{t('roasts.selectBlend')}</option>
+                      {(blendsListData?.items ?? []).map((b) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </Select>
+                  </div>
                 </div>
-              </div>
+              )}
               <div>
-                <Label htmlFor="filter_roast_name" className="text-sm">3. По наименованию обжарки</Label>
+                <Label htmlFor="filter_roast_name" className="text-sm">{canEditRoasts ? '3' : '2'}. {t('roasts.byRoastName')}</Label>
                 <Input
                   id="filter_roast_name"
                   type="text"
-                  placeholder="Часть названия"
+                  placeholder={t('roasts.partOfName')}
                   value={filterRoastName}
                   onChange={(e) => setFilterRoastName(e.target.value)}
                   className="mt-1 rounded-input"
                 />
               </div>
               <div>
-                <Label htmlFor="filter_roast_id" className="text-sm">4. По ID</Label>
+                <Label htmlFor="filter_roast_id" className="text-sm">4. {t('roasts.byId')}</Label>
                 <Input
                   id="filter_roast_id"
                   type="text"
-                  placeholder="Например: 2829"
+                  placeholder={t('roasts.filterIdPlaceholder')}
                   value={filterRoastId}
                   onChange={(e) => setFilterRoastId(e.target.value)}
                   className="mt-1 rounded-input"
                 />
               </div>
               <div>
-                <Label className="text-sm">5. По дате</Label>
+                <Label className="text-sm">5. {t('roasts.byDate')}</Label>
                 <div className="mt-1 flex gap-2 items-center">
                   <Input
                     type="date"
-                    placeholder="От"
+                    placeholder={t('roasts.dateFrom')}
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
                     className="rounded-input"
@@ -861,23 +1166,23 @@ export const RoastsPage = () => {
                   <span className="text-gray-500">—</span>
                   <Input
                     type="date"
-                    placeholder="До"
+                    placeholder={t('roasts.dateTo')}
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
                     className="rounded-input"
                   />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Оставьте одинаковые даты для одного дня</p>
+                <p className="mt-1 text-xs text-gray-500">{t('roasts.sameDateHint')}</p>
               </div>
               <div>
-                <Label htmlFor="filter_user" className="text-sm">6. По пользователю</Label>
+                <Label htmlFor="filter_user" className="text-sm">6. {t('roasts.byUser')}</Label>
                 <Select
                   id="filter_user"
                   value={filterUserId}
                   onChange={(e) => setFilterUserId(e.target.value)}
                   className="mt-1 rounded-input"
                 >
-                  <option value="">— Выберите пользователя —</option>
+                  <option value="">{t('roasts.selectUser')}</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>{u.email}</option>
                   ))}
@@ -899,10 +1204,10 @@ export const RoastsPage = () => {
                   setDateTo('');
                 }}
               >
-                Сбросить
+                {t('roasts.reset')}
               </Button>
               <Button size="sm" onClick={() => setFilterDialogOpen(false)}>
-                Применить
+                {t('roasts.apply')}
               </Button>
             </div>
           </div>
@@ -918,8 +1223,147 @@ export const RoastsPage = () => {
         />
       )}
 
-      {/* Диалог редактирования обжарки */}
-      {editingRoast && (
+      {/* Диалог текстовой наклейки */}
+      {manualStickerOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/30"
+            aria-hidden
+            onClick={() => setManualStickerOpen(false)}
+          />
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-card border border-gray-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">
+              {t('roasts.customStickerTitle')}
+            </h3>
+            <p className="mb-3 text-sm text-gray-600">
+              {t('roasts.customStickerHint')}
+            </p>
+            <div className="mb-4 grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="manual_sticker_font" className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {t('roasts.customStickerFont')}
+                </Label>
+                <Select
+                  id="manual_sticker_font"
+                  value={manualStickerFont}
+                  onChange={(e) =>
+                    setManualStickerFont(e.target.value as 'sans' | 'serif' | 'mono')
+                  }
+                  className="rounded-input text-sm"
+                >
+                  <option value="sans">Sans-serif (Arial)</option>
+                  <option value="serif">Serif (Times)</option>
+                  <option value="mono">Monospace (Courier)</option>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="manual_sticker_font_size" className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {t('roasts.customStickerFontSize')}
+                </Label>
+                <Input
+                  id="manual_sticker_font_size"
+                  type="number"
+                  min={5}
+                  max={36}
+                  step={0.5}
+                  value={manualStickerFontSize}
+                  onChange={(e) => setManualStickerFontSize(e.target.value)}
+                  className="rounded-input text-sm"
+                />
+              </div>
+            </div>
+            <div className="mb-4 space-y-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                {t('roasts.customStickerStyle')}
+              </span>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={manualStickerBold}
+                    onChange={(e) => setManualStickerBold(e.target.checked)}
+                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                  />
+                  <span className="font-semibold">{t('roasts.customStickerBold')}</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={manualStickerItalic}
+                    onChange={(e) => setManualStickerItalic(e.target.checked)}
+                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                  />
+                  <span className="italic">{t('roasts.customStickerItalic')}</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={manualStickerUnderline}
+                    onChange={(e) => setManualStickerUnderline(e.target.checked)}
+                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                  />
+                  <span className="underline decoration-1">
+                    {t('roasts.customStickerUnderline')}
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual_sticker_text" className="text-sm">
+                {t('roasts.customStickerPreviewLabel')}
+              </Label>
+              <textarea
+                id="manual_sticker_text"
+                value={manualStickerText}
+                onChange={(e) => setManualStickerText(e.target.value)}
+                rows={6}
+                className="w-full rounded-input border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/40 resize-vertical min-h-[120px]"
+              />
+            </div>
+            <div className="mt-4 space-y-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                {t('roasts.customStickerPreview')}
+              </span>
+              <div
+                className="mt-1 rounded-card border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm text-gray-900"
+                style={{
+                  fontFamily:
+                    manualStickerFont === 'serif'
+                      ? "Georgia, 'Times New Roman', serif"
+                      : manualStickerFont === 'mono'
+                        ? "'Courier New', Menlo, monospace"
+                        : "Arial, Helvetica, sans-serif",
+                  fontSize: `${Number(
+                    manualStickerFontSize.replace(',', '.')
+                  ) || 9.5}pt`,
+                  fontWeight: manualStickerBold ? 700 : 400,
+                  fontStyle: manualStickerItalic ? 'italic' : 'normal',
+                  textDecoration: manualStickerUnderline ? 'underline' : 'none',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {manualStickerText || ' '}
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setManualStickerOpen(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button size="sm" onClick={handleManualStickerPrint}>
+                {t('roasts.customStickerPrint')}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Диалог редактирования обжарки (только user/admin) */}
+      {editingRoast && canEditRoasts && (
         <EditRoastInfoDialog
           roast={editingRoast}
           onClose={() => setEditingRoast(null)}
@@ -935,10 +1379,10 @@ export const RoastsPage = () => {
         <>
           <div className="fixed inset-0 z-40 bg-black/30" aria-hidden onClick={() => setExportDialogOpen(false)} />
           <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-gray-200 bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Экспорт обжарок</h3>
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">{t('roasts.exportRoasts')}</h3>
             <div className="space-y-4">
               <div>
-                <Label className="text-sm">Формат</Label>
+                <Label className="text-sm">{t('roasts.format')}</Label>
                 <div className="mt-1 flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -963,7 +1407,7 @@ export const RoastsPage = () => {
                 </div>
               </div>
               <div>
-                <Label className="text-sm">Что экспортировать</Label>
+                <Label className="text-sm">{t('roasts.scope')}</Label>
                 <div className="mt-1 space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -973,7 +1417,7 @@ export const RoastsPage = () => {
                       onChange={() => setExportScope('page')}
                       className="text-brand focus:ring-brand"
                     />
-                    <span className="text-sm">Текущая страница ({sortedRoasts.length} записей)</span>
+                    <span className="text-sm">{t('roasts.currentPageRecords').replace('{n}', String(sortedRoasts.length))}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -983,7 +1427,7 @@ export const RoastsPage = () => {
                       onChange={() => setExportScope('all')}
                       className="text-brand focus:ring-brand"
                     />
-                    <span className="text-sm">Вся выборка (с учётом фильтров)</span>
+                    <span className="text-sm">{t('roasts.allFiltered')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -993,20 +1437,20 @@ export const RoastsPage = () => {
                       onChange={() => setExportScope('selected')}
                       className="text-brand focus:ring-brand"
                     />
-                    <span className="text-sm">Только выбранные ({selectedIds.size} записей)</span>
+                    <span className="text-sm">{t('roasts.selectedRecords').replace('{n}', String(selectedIds.size))}</span>
                   </label>
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                В файл попадут видимые колонки. Имя файла: roasts_export_ГГГГ-ММ-ДД_ЧЧ-ММ
+                {t('roasts.exportFileHint')}
               </p>
             </div>
             <div className="mt-6 flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(false)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button size="sm" onClick={handleExport} disabled={exportPending}>
-                {exportPending ? 'Загрузка…' : 'Экспортировать'}
+                {exportPending ? t('roasts.loading') : t('roasts.exportButton')}
               </Button>
             </div>
           </div>
@@ -1016,7 +1460,7 @@ export const RoastsPage = () => {
       {/* Пагинация: выбор кол-ва на странице */}
       <div className="flex flex-wrap items-center gap-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">На странице:</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{t('roasts.perPage')}</span>
           <Select
             value={String(pageSize)}
             onChange={(e) => {
@@ -1032,10 +1476,13 @@ export const RoastsPage = () => {
             <option value="500">500</option>
           </Select>
         </div>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-gray-600 dark:text-gray-400">
           {totalRoasts === 0
-            ? 'Нет записей'
-            : `Показано ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, totalRoasts)} из ${totalRoasts}`}
+            ? t('roasts.noRecords')
+            : t('roasts.showingRange')
+                .replace('{from}', String(page * pageSize + 1))
+                .replace('{to}', String(Math.min((page + 1) * pageSize, totalRoasts)))
+                .replace('{total}', String(totalRoasts))}
         </span>
         <div className="flex items-center gap-1">
           <Button
@@ -1057,7 +1504,7 @@ export const RoastsPage = () => {
         </div>
       </div>
 
-      {showForm && (
+      {showForm && canEditRoasts && (
         <Card>
           <CardHeader>
             <CardTitle>Add New Roast</CardTitle>
@@ -1144,8 +1591,8 @@ export const RoastsPage = () => {
         </div>
       )}
       <div className="min-w-0 w-full overflow-x-auto">
-        <table className="w-full text-xs text-left">
-          <thead className="bg-gray-100 border-b-2 border-gray-200">
+        <table className="w-full text-xs text-left text-gray-900 dark:text-gray-100">
+          <thead className="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-200 dark:border-gray-600">
             <tr>
               <th className="py-2 px-2 w-8">
                 <input
@@ -1157,32 +1604,32 @@ export const RoastsPage = () => {
                   aria-label="Выбрать все"
                 />
               </th>
-              <th className="py-2 px-2 w-6 font-medium text-gray-700" title="Статус целей">
+              <th className="py-2 px-2 w-6 font-medium text-gray-700 dark:text-gray-200" title="Статус целей">
                 {/* Цветовой индикатор целей */}
               </th>
-              <th className="py-2 px-2 w-14 font-medium text-gray-700 truncate" title="ID">
+              <th className="py-2 px-2 w-14 font-medium text-gray-700 dark:text-gray-200 truncate" title="ID">
                 <button
                   type="button"
                   onClick={() => setSortDesc((d) => !d)}
-                  className="hover:text-gray-900 flex items-center gap-0.5"
+                  className="hover:text-gray-900 dark:hover:text-white flex items-center gap-0.5"
                 >
                   ID {sortDesc ? '↓' : '↑'}
                 </button>
               </th>
               {visibleColumns.map((col) => (
-                <th key={col.id} className="py-2 px-2 font-medium text-gray-700 truncate" title={col.label}>
-                  {col.shortLabel}
+                <th key={col.id} className="py-2 px-2 font-medium text-gray-700 dark:text-gray-200 truncate" title={t(col.labelKey)}>
+                  {t(col.shortLabelKey)}
                 </th>
               ))}
-              <th className="py-2 px-2 w-10 font-medium text-gray-700 truncate">Действия</th>
+              <th className="py-2 px-2 w-10 font-medium text-gray-700 dark:text-gray-200 truncate">{t('roasts.actions')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {sortedRoasts.length === 0 ? (
               <tr>
                 <td colSpan={4 + visibleColumns.length} className="py-12 text-center">
-                  <p className="text-gray-500">
-                    {searchQuery.trim() ? 'По запросу ничего не найдено. Измените поиск или очистите поле.' : 'Нет обжарок для отображения'}
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {searchQuery.trim() ? t('roasts.noSearchResults') : t('roasts.noRoastsToDisplay')}
                   </p>
                 </td>
               </tr>
@@ -1193,92 +1640,115 @@ export const RoastsPage = () => {
               const renderCell = (colId: string) => {
                 switch (colId) {
                   case 'date':
-                    return <span className="text-gray-600 whitespace-nowrap truncate block" title={formatDateTimeTable(roastDate)}>{formatDateTimeTable(roastDate)}</span>;
-                  case 'name':
+                    return <span className="text-gray-600 dark:text-gray-300 whitespace-nowrap truncate block" title={formatDateTimeTable(roastDate)}>{formatDateTimeTable(roastDate)}</span>;
+                  case 'name': {
                     const nameVal = roast.title ?? roast.label ?? '—';
                     const blendVal = roast.blend_spec?.label ?? roast.blend_hr_id ?? '';
+                    if (!canEditRoasts) {
+                      return (
+                        <div className="truncate" title={[nameVal, blendVal].filter(Boolean).join(' / ')}>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{nameVal}</span>
+                          {blendVal && <span className="text-gray-500 dark:text-gray-400 truncate block">{blendVal}</span>}
+                        </div>
+                      );
+                    }
                     return (
                       <button
                         type="button"
                         onClick={() => setEditingRoast(roast)}
                         className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1"
-                        title="Нажмите для редактирования"
+                        title={t('roasts.clickToEdit')}
                       >
                         <div className="truncate" title={[nameVal, blendVal].filter(Boolean).join(' / ')}>
-                          <span className="font-medium text-gray-900 truncate block">{nameVal}</span>
-                          {blendVal && <span className="text-gray-500 truncate block">{blendVal}</span>}
+                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate block">{nameVal}</span>
+                          {blendVal && <span className="text-gray-500 dark:text-gray-400 truncate block">{blendVal}</span>}
                         </div>
                       </button>
                     );
+                  }
                   case 'warehouse':
-                    return <span className="text-gray-700 truncate block" title={roast.location_hr_id ?? ''}>{roast.location_hr_id ?? '—'}</span>;
+                    return <span className="text-gray-700 dark:text-gray-300 truncate block" title={roast.location_hr_id ?? ''}>{roast.location_hr_id ?? '—'}</span>;
                   case 'machine':
+                    if (!canEditRoasts) return <span className="text-gray-600 dark:text-gray-300 truncate block">{roast.machine ?? '—'}</span>;
                     return (
                       <button
                         type="button"
                         onClick={() => setEditingRoast(roast)}
-                        className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-600"
-                        title="Нажмите для редактирования"
+                        className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-600 dark:text-gray-300"
+                        title={t('roasts.clickToEdit')}
                       >
                         {roast.machine ?? '—'}
                       </button>
                     );
                   case 'user':
+                    if (!canEditRoasts) return <span className="text-gray-600 dark:text-gray-300 truncate block">{roast.operator ?? '—'}</span>;
                     return (
                       <button
                         type="button"
                         onClick={() => setEditingRoast(roast)}
-                        className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-600"
-                        title="Нажмите для редактирования"
+                        className="text-left w-full truncate hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-600 dark:text-gray-300"
+                        title={t('roasts.clickToEdit')}
                       >
                         {roast.operator ?? '—'}
                       </button>
                     );
                   case 'green_weight':
+                    if (!canEditRoasts) return <span className="text-gray-700 dark:text-gray-200">{formatWeight(Number(roast.green_weight_kg) || 0)}</span>;
                     return (
                       <button
                         type="button"
                         onClick={() => setEditingRoast(roast)}
-                        className="text-left w-full hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-700"
-                        title="Нажмите для редактирования"
+                        className="text-left w-full hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-700 dark:text-gray-200"
+                        title={t('roasts.clickToEdit')}
                       >
                         {formatWeight(Number(roast.green_weight_kg) || 0)}
                       </button>
                     );
                   case 'roasted_weight':
+                    if (!canEditRoasts) return <span className="text-gray-700 dark:text-gray-200">{roast.roasted_weight_kg != null ? formatWeight(roast.roasted_weight_kg) : '—'}</span>;
                     return (
                       <button
                         type="button"
                         onClick={() => setEditingRoast(roast)}
-                        className="text-left w-full hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-700"
-                        title="Нажмите для редактирования"
+                        className="text-left w-full hover:text-brand hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30 rounded px-1 -mx-1 text-gray-700 dark:text-gray-200"
+                        title={t('roasts.clickToEdit')}
                       >
                         {roast.roasted_weight_kg != null ? formatWeight(roast.roasted_weight_kg) : '—'}
                       </button>
                     );
                   case 'shrinkage':
-                    return loss != null ? <span className="text-gray-600">{formatPercent(loss)}</span> : '—';
+                    return loss != null ? <span className="text-gray-600 dark:text-gray-300">{formatPercent(loss)}</span> : '—';
                   case 'dtr': {
                     const devTime = roast.DEV_time != null ? formatTimeMMSS(roast.DEV_time) : null;
                     const devPct = roast.DEV_ratio != null ? formatPercent(roast.DEV_ratio) : null;
-                    if (!devTime && !devPct) return <span className="text-gray-700">—</span>;
+                    if (!devTime && !devPct) return <span className="text-gray-700 dark:text-gray-300">—</span>;
                     const text = devTime && devPct ? `${devTime} (${devPct})` : (devTime ?? devPct ?? '—');
-                    return <span className="text-gray-700" title="Время развития / % развития">{text}</span>;
+                    return <span className="text-gray-700 dark:text-gray-200" title={t('roasts.devTimeTitle')}>{text}</span>;
                   }
                   case 'bean_color':
-                    return <span className="text-gray-600">{roast.whole_color != null && roast.whole_color !== 0 ? String(roast.whole_color) : '—'}</span>;
+                    return <span className="text-gray-600 dark:text-gray-300">{roast.whole_color != null && roast.whole_color !== 0 ? String(roast.whole_color) : '—'}</span>;
                   case 'grind_color':
-                    return <span className="text-gray-600">{roast.ground_color != null && roast.ground_color !== 0 ? String(roast.ground_color) : '—'}</span>;
+                    return <span className="text-gray-600 dark:text-gray-300">{roast.ground_color != null && roast.ground_color !== 0 ? String(roast.ground_color) : '—'}</span>;
                   case 'coffee':
                     const coffeeVal = roast.coffee_hr_id ?? roast.blend_spec?.label ?? roast.label ?? '—';
-                    return <span className="text-gray-700 truncate block" title={String(coffeeVal)}>{coffeeVal}</span>;
+                    return <span className="text-gray-700 dark:text-gray-200 truncate block" title={String(coffeeVal)}>{coffeeVal}</span>;
                   case 'rating':
+                    if (!canEditRoasts) return <span className="text-gray-500 dark:text-gray-400">—</span>;
                     return (
-                      <button type="button" className="p-1 text-gray-500 hover:text-brand" title="Оценка">
+                      <button type="button" className="p-1 text-gray-500 dark:text-gray-400 hover:text-brand" title={t('roasts.ratingTitle')}>
                         <Pencil className="w-4 h-4" />
                       </button>
                     );
                   case 'quality_control':
+                    if (!canEditRoasts) {
+                      return (
+                        <div className="flex items-center justify-center">
+                          <span className="text-gray-500 dark:text-gray-400" title={t('roasts.qualityControl')}>
+                            {roast.in_quality_control ? '✓' : '—'}
+                          </span>
+                        </div>
+                      );
+                    }
                     return (
                       <div className="flex items-center justify-center">
                         <input
@@ -1291,7 +1761,7 @@ export const RoastsPage = () => {
                             });
                           }}
                           className="rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
-                          title="Отметить для контроля качества"
+                          title={t('roasts.inQC')}
                           onClick={(e) => e.stopPropagation()}
                         />
                       </div>
@@ -1310,7 +1780,7 @@ export const RoastsPage = () => {
                 : 'bg-gray-300'; // Серый если статус не определен (нет активных целей)
               
               return (
-                <tr key={roast.id} className="hover:bg-brand-light/50 transition-colors">
+                <tr key={roast.id} className="hover:bg-brand-light/50 dark:hover:bg-white/5 transition-colors">
                   <td className="py-1.5 px-2">
                     <input
                       type="checkbox"
@@ -1325,16 +1795,16 @@ export const RoastsPage = () => {
                         className={`w-3 h-3 rounded ${statusColor}`}
                         title={
                           goalsStatus === 'green'
-                            ? 'Все цели выполнены'
+                            ? t('roasts.goalsStatusGreen')
                             : goalsStatus === 'red'
-                            ? 'Цели не выполнены'
-                            : 'Отсутствуют данные для проверки'
+                            ? t('roasts.goalsStatusRed')
+                            : t('roasts.goalsStatusYellow')
                         }
                       />
                     )}
                   </td>
                   <td className="py-1.5 px-2">
-                    <Link to={`/roasts/${roast.id}`} className="font-medium text-brand hover:underline truncate block">
+                    <Link to={`/roasts/${roast.id}`} className="font-medium text-brand dark:text-qq-amber hover:underline truncate block">
                       {roastDisplayId(roast)}
                     </Link>
                   </td>
@@ -1360,6 +1830,7 @@ export const RoastsPage = () => {
                       onDelete={() => handleDeleteRoast(roast.id)}
                       uploadPending={uploadProfileMutation.isPending}
                       deletePending={deleteRoastMutation.isPending}
+                      canEdit={canEditRoasts}
                     />
                   </td>
                 </tr>

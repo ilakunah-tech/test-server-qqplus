@@ -112,7 +112,7 @@ export const ProductionTasksPage = () => {
     }
   };
 
-  const tasks = tasksData?.data.items ?? [];
+  const tasks = tasksData?.items ?? [];
   const machines = machinesData ?? [];
 
   const startEdit = (task: ProductionTask) => {

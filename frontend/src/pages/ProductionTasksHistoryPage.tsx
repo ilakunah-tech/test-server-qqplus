@@ -67,8 +67,8 @@ export const ProductionTasksHistoryPage = () => {
     });
   };
 
-  const historyItems = historyData?.data.items ?? [];
-  const tasks = tasksData?.data.items ?? [];
+  const historyItems = historyData?.items ?? [];
+  const tasks = tasksData?.items ?? [];
   const machines = machinesData ?? [];
 
   const getTaskTitle = (taskId: string) => {

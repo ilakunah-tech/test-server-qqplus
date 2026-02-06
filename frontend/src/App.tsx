@@ -5,7 +5,6 @@ import { authStore } from '@/store/authStore';
 import { settingsStore } from '@/store/settingsStore';
 import { Layout } from '@/components/layout/Layout';
 import { LoginPage } from '@/pages/LoginPage';
-import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { InventoryPage } from '@/pages/InventoryPage';
 import { RoastsPage } from '@/pages/RoastsPage';
@@ -18,6 +17,8 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { ProductionTasksPage } from '@/pages/ProductionTasksPage';
 import { ProductionTasksHistoryPage } from '@/pages/ProductionTasksHistoryPage';
+import { KpiPage } from '@/pages/KpiPage';
+import { GreenBeanDataPage } from '@/pages/GreenBeanDataPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,11 +34,21 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+/** Only admin@test.com can manage users (create/edit/delete). */
+const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = authStore((state) => state.isAuthenticated);
+  const email = authStore((state) => state.email);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (email?.toLowerCase() !== 'admin@test.com') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+/** QC and SM can only access dashboard, roasts, and (QC only) quality-control. Redirect others to dashboard. */
+const FullAccessRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = authStore((state) => state.isAuthenticated);
   const role = authStore((state) => state.role);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (role !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (role === 'qc' || role === 'sm') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -75,7 +86,6 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/dashboard"
             element={
@@ -90,9 +100,11 @@ function App() {
             path="/inventory"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <InventoryPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <InventoryPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -110,9 +122,11 @@ function App() {
             path="/roasts/compare"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <CompareRoastsPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <CompareRoastsPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -130,9 +144,11 @@ function App() {
             path="/schedule"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <SchedulePage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <SchedulePage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -140,9 +156,11 @@ function App() {
             path="/production-tasks"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <ProductionTasksPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <ProductionTasksPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -150,9 +168,11 @@ function App() {
             path="/production-tasks/history"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <ProductionTasksHistoryPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <ProductionTasksHistoryPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -160,9 +180,11 @@ function App() {
             path="/blends"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <BlendsPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <BlendsPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
@@ -180,20 +202,44 @@ function App() {
             path="/settings"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <SettingsPage />
-                </Layout>
+                <FullAccessRoute>
+                  <Layout>
+                    <SettingsPage />
+                  </Layout>
+                </FullAccessRoute>
               </ProtectedRoute>
             }
           />
           <Route
             path="/users"
             element={
-              <AdminRoute>
+              <SuperAdminRoute>
                 <Layout>
                   <UsersPage />
                 </Layout>
-              </AdminRoute>
+              </SuperAdminRoute>
+            }
+          />
+          <Route
+            path="/kpi"
+            element={
+              <SuperAdminRoute>
+                <Layout>
+                  <KpiPage />
+                </Layout>
+              </SuperAdminRoute>
+            }
+          />
+          <Route
+            path="/green-bean-data"
+            element={
+              <ProtectedRoute>
+                <FullAccessRoute>
+                  <Layout>
+                    <GreenBeanDataPage />
+                  </Layout>
+                </FullAccessRoute>
+              </ProtectedRoute>
             }
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -1,27 +1,37 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FlamesDecor } from '@/components/icons/FlamesDecor';
 
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-  remember: z.boolean().optional(),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
+type LoginFormData = {
+  email: string;
+  password: string;
+  remember?: boolean;
+};
 
 export const LoginForm = () => {
   const { login } = useAuth();
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const loginSchema = useMemo(
+    () =>
+      z.object({
+        email: z.string().email(t('login.invalidEmail')),
+        password: z.string().min(1, t('login.passwordRequired')),
+        remember: z.boolean().optional(),
+      }),
+    [t]
+  );
 
   const {
     register,
@@ -39,8 +49,8 @@ export const LoginForm = () => {
     setIsLoading(true);
     try {
       await login(data);
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('login.loginFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -56,63 +66,56 @@ export const LoginForm = () => {
             </div>
             <CardTitle className="text-3xl text-brand">QQ Coffee · Artisan+</CardTitle>
             <CardDescription className="text-center">
-              Sign in to your account
+              {t('login.signInToAccount')}
             </CardDescription>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-brand hover:underline hover:text-qq-purple-dark">
-              Sign up
-            </Link>
-          </p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-input text-sm">
-                {error}
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-input text-sm">
+                  {error}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="email">{t('login.email')}</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="admin@test.com"
+                  {...register('email')}
+                />
+                {errors.email && (
+                  <p className="text-sm text-red-600">{errors.email.message}</p>
+                )}
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="admin@test.com"
-                {...register('email')}
-              />
-              {errors.email && (
-                <p className="text-sm text-red-600">{errors.email.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                {...register('password')}
-              />
-              {errors.password && (
-                <p className="text-sm text-red-600">{errors.password.message}</p>
-              )}
-            </div>
-            <div className="flex items-center">
-              <input
-                id="remember"
-                type="checkbox"
-                className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
-                {...register('remember')}
-              />
-              <Label htmlFor="remember" className="ml-2 cursor-pointer">
-                Remember me
-              </Label>
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <div className="space-y-2">
+                <Label htmlFor="password">{t('login.password')}</Label>
+                <PasswordInput
+                  id="password"
+                  placeholder="••••••••"
+                  {...register('password')}
+                />
+                {errors.password && (
+                  <p className="text-sm text-red-600">{errors.password.message}</p>
+                )}
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+                  {...register('remember')}
+                />
+                <Label htmlFor="remember" className="ml-2 cursor-pointer">
+                  {t('login.rememberMe')}
+                </Label>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? t('login.signingIn') : t('login.signIn')}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
       <FlamesDecor className="h-24" />
     </div>

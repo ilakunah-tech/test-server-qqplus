@@ -4,13 +4,16 @@ import { authApi } from '@/api/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import type { User, UserRole } from '@/types/api';
 import { Users as UsersIcon, Plus, Trash2, X, Pencil } from 'lucide-react';
 import { authStore } from '@/store/authStore';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export const UsersPage = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const currentUserId = authStore((s) => s.userId);
   
@@ -43,7 +46,7 @@ export const UsersPage = () => {
       setNewUserRole('user');
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail ?? 'Failed to create user');
+      alert(err.response?.data?.detail ?? t('users.createFailed'));
     },
   });
 
@@ -54,7 +57,7 @@ export const UsersPage = () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'users'] });
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail ?? 'Failed to update role');
+      alert(err.response?.data?.detail ?? t('users.updateRoleFailed'));
     },
   });
 
@@ -66,7 +69,7 @@ export const UsersPage = () => {
     },
     onError: (err: { response?: { data?: { detail?: string | string[] } } }) => {
       const detail = err.response?.data?.detail;
-      const msg = Array.isArray(detail) ? detail[0]?.msg ?? String(detail) : detail ?? 'Failed to delete user';
+      const msg = Array.isArray(detail) ? detail[0]?.msg ?? String(detail) : detail ?? t('users.deleteFailed');
       setDeleteError(msg);
     },
   });
@@ -93,7 +96,7 @@ export const UsersPage = () => {
       setEditPassword('');
     },
     onError: (err: { response?: { data?: { detail?: string } } }) => {
-      alert(err.response?.data?.detail ?? 'Failed to update user');
+      alert(err.response?.data?.detail ?? t('users.updateFailed'));
     },
   });
 
@@ -111,11 +114,11 @@ export const UsersPage = () => {
     e.preventDefault();
     if (!editingUser) return;
     if (!editUsername.trim() || !editEmail.trim()) {
-      alert('Username and email are required');
+      alert(t('users.usernameEmailRequired'));
       return;
     }
     if (editPassword && editPassword.length < 8) {
-      alert('Password must be at least 8 characters');
+      alert(t('users.passwordMinLengthAlert'));
       return;
     }
     updateUserMutation.mutate({
@@ -135,11 +138,11 @@ export const UsersPage = () => {
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserUsername.trim() || !newUserEmail || !newUserPassword) {
-      alert('Username, email and password are required');
+      alert(t('users.requiredFields'));
       return;
     }
     if (newUserPassword.length < 8) {
-      alert('Password must be at least 8 characters');
+      alert(t('users.passwordMinLengthAlert'));
       return;
     }
     createUserMutation.mutate({
@@ -153,10 +156,10 @@ export const UsersPage = () => {
   const handleDeleteUser = (user: User) => {
     setDeleteError(null);
     if (user.id === currentUserId) {
-      setDeleteError('You cannot delete yourself');
+      setDeleteError(t('users.cannotDeleteYourself'));
       return;
     }
-    if (confirm(`Are you sure you want to delete user ${user.username ?? user.email}?`)) {
+    if (confirm(t('users.confirmDeleteUser').replace('{name}', user.username ?? user.email))) {
       deleteUserMutation.mutate(user.id);
     }
   };
@@ -164,7 +167,7 @@ export const UsersPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
+        <p className="text-gray-500 dark:text-gray-400">{t('users.loadingUsers')}</p>
       </div>
     );
   }
@@ -172,7 +175,7 @@ export const UsersPage = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <p className="text-red-600 dark:text-red-400">Failed to load users.</p>
+        <p className="text-red-600 dark:text-red-400">{t('users.failedToLoadUsers')}</p>
       </div>
     );
   }
@@ -183,10 +186,10 @@ export const UsersPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <UsersIcon className="w-8 h-8 text-brand" />
-            Users
+            {t('users.users')}
           </h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Manage users, roles, and permissions. Only admins can access this page.
+            {t('users.manageUsers')}
           </p>
         </div>
         <Button
@@ -196,12 +199,12 @@ export const UsersPage = () => {
           {showCreateForm ? (
             <>
               <X className="w-4 h-4" />
-              Cancel
+              {t('common.cancel')}
             </>
           ) : (
             <>
               <Plus className="w-4 h-4" />
-              Add User
+              {t('users.addUser')}
             </>
           )}
         </Button>
@@ -210,25 +213,25 @@ export const UsersPage = () => {
       {showCreateForm && (
         <Card className="border-purple-200/60 dark:border-gray-700">
           <CardHeader>
-            <CardTitle className="text-lg">Create New User</CardTitle>
+            <CardTitle className="text-lg">{t('users.createNewUser')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">{t('users.username')}</Label>
                   <Input
                     id="username"
                     type="text"
                     value={newUserUsername}
                     onChange={(e) => setNewUserUsername(e.target.value)}
-                    placeholder="Display name"
+                    placeholder={t('users.displayName')}
                     required
                     maxLength={64}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('login.email')}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -239,19 +242,18 @@ export const UsersPage = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input
+                  <Label htmlFor="password">{t('login.password')}</Label>
+                  <PasswordInput
                     id="password"
-                    type="password"
                     value={newUserPassword}
                     onChange={(e) => setNewUserPassword(e.target.value)}
-                    placeholder="Min 8 characters"
+                    placeholder={t('users.min8Chars')}
                     required
                     minLength={8}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="role">Role</Label>
+                  <Label htmlFor="role">{t('users.role')}</Label>
                   <Select
                     id="role"
                     value={newUserRole}
@@ -259,12 +261,14 @@ export const UsersPage = () => {
                   >
                     <option value="user">user</option>
                     <option value="admin">admin</option>
+                    <option value="qc">QC</option>
+                    <option value="sm">SM</option>
                   </Select>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button type="submit" disabled={createUserMutation.isPending}>
-                  {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+                  {createUserMutation.isPending ? t('users.creating') : t('users.createUser')}
                 </Button>
               </div>
             </form>
@@ -293,23 +297,23 @@ export const UsersPage = () => {
             onClick={() => { setEditingUser(null); setEditPassword(''); }}
           />
           <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Редактировать пользователя</h3>
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">{t('users.editUser')}</h3>
             <form onSubmit={handleEditUser} className="space-y-4">
               <div>
-                <Label htmlFor="edit-username">Username</Label>
+                <Label htmlFor="edit-username">{t('users.username')}</Label>
                 <Input
                   id="edit-username"
                   type="text"
                   value={editUsername}
                   onChange={(e) => setEditUsername(e.target.value)}
-                  placeholder="Display name"
+                  placeholder={t('users.displayName')}
                   required
                   maxLength={64}
                   className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="edit-email">Email</Label>
+                <Label htmlFor="edit-email">{t('login.email')}</Label>
                 <Input
                   id="edit-email"
                   type="email"
@@ -321,19 +325,18 @@ export const UsersPage = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-password">Новый пароль</Label>
-                <Input
+                <Label htmlFor="edit-password">{t('users.newPassword')}</Label>
+                <PasswordInput
                   id="edit-password"
-                  type="password"
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
-                  placeholder="Оставьте пустым, чтобы не менять"
+                  placeholder={t('users.leaveEmptyToKeep')}
                   minLength={editPassword ? 8 : undefined}
                   className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="edit-role">Role</Label>
+                <Label htmlFor="edit-role">{t('users.role')}</Label>
                 <Select
                   id="edit-role"
                   value={editRole}
@@ -342,6 +345,8 @@ export const UsersPage = () => {
                 >
                   <option value="user">user</option>
                   <option value="admin">admin</option>
+                  <option value="qc">QC</option>
+                  <option value="sm">SM</option>
                 </Select>
               </div>
               <div className="flex gap-2 justify-end pt-2">
@@ -350,10 +355,10 @@ export const UsersPage = () => {
                   variant="outline"
                   onClick={() => { setEditingUser(null); setEditPassword(''); }}
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={updateUserMutation.isPending}>
-                  {updateUserMutation.isPending ? 'Сохранение…' : 'Сохранить'}
+                  {updateUserMutation.isPending ? t('users.saving') : t('common.save')}
                 </Button>
               </div>
             </form>
@@ -363,7 +368,7 @@ export const UsersPage = () => {
 
       <Card className="border-purple-200/60 dark:border-gray-700">
         <CardHeader>
-          <CardTitle className="text-lg">All Users ({users.length})</CardTitle>
+          <CardTitle className="text-lg">{t('users.allUsers')} ({users.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -371,22 +376,22 @@ export const UsersPage = () => {
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-600">
                   <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Username
+                    {t('users.username')}
                   </th>
                   <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Email
+                    {t('login.email')}
                   </th>
                   <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Role
+                    {t('users.role')}
                   </th>
                   <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Status
+                    {t('users.status')}
                   </th>
                   <th className="text-left py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Created
+                    {t('users.created')}
                   </th>
                   <th className="text-right py-3 px-2 font-medium text-gray-700 dark:text-gray-300">
-                    Actions
+                    {t('users.actions')}
                   </th>
                 </tr>
               </thead>
@@ -399,7 +404,7 @@ export const UsersPage = () => {
                     <td className="py-3 px-2 text-gray-900 dark:text-gray-100">
                       {user.username ?? '—'}
                       {user.id === currentUserId && (
-                        <span className="ml-2 text-xs text-brand">(you)</span>
+                        <span className="ml-2 text-xs text-brand">{t('users.you')}</span>
                       )}
                     </td>
                     <td className="py-3 px-2 text-gray-700 dark:text-gray-300">
@@ -416,6 +421,8 @@ export const UsersPage = () => {
                       >
                         <option value="user">user</option>
                         <option value="admin">admin</option>
+                        <option value="qc">QC</option>
+                        <option value="sm">SM</option>
                       </Select>
                     </td>
                     <td className="py-3 px-2">
@@ -426,7 +433,7 @@ export const UsersPage = () => {
                             : 'text-red-600 dark:text-red-400'
                         }
                       >
-                        {user.is_active ? 'Active' : 'Inactive'}
+                        {user.is_active ? t('users.active') : t('users.inactive')}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-gray-600 dark:text-gray-400">
@@ -441,7 +448,7 @@ export const UsersPage = () => {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0"
-                          title="Редактировать"
+                          title={t('users.editTitle')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditUser(user);
@@ -455,7 +462,7 @@ export const UsersPage = () => {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                          title={user.id === currentUserId ? 'Cannot delete yourself' : `Delete ${user.username ?? user.email}`}
+                          title={user.id === currentUserId ? t('users.cannotDeleteYourselfTitle') : `${t('users.deleteUserTitle')} ${user.username ?? user.email}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteUser(user);
@@ -475,7 +482,7 @@ export const UsersPage = () => {
           </div>
           {users.length === 0 && (
             <p className="text-center py-8 text-gray-500 dark:text-gray-400">
-              No users found.
+              {t('users.noUsersFound')}
             </p>
           )}
         </CardContent>

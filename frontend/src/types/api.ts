@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'admin' | 'qc' | 'sm';
 
 export interface User {
   id: string;
@@ -177,8 +177,19 @@ export interface Roast {
   in_quality_control?: boolean;  // Mark roast for Quality Control table
   
   // Goals status (проверка соответствия целям)
-  goals_status?: 'green' | 'yellow' | 'red';  // Статус проверки целей
-  
+  goals_status?: 'green' | 'yellow' | 'red';
+  goals_check?: {
+    status: 'green' | 'yellow' | 'red';
+    goals: Array<{
+      goal_id: string;
+      goal_name: string;
+      status: 'green' | 'yellow' | 'red';
+      parameters: Record<string, { status: string; message?: string; reference?: number; actual?: number; range?: number[] }>;
+    }>;
+    reference_roast_id?: string;
+    message?: string;
+  };
+
   // Stock tracking
   deducted_components?: Array<{
     coffee_id: string;
